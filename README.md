@@ -1,5 +1,7 @@
 # jicama feedback plugin — prototype
 
+[![GitHub stars](https://img.shields.io/github/stars/vasharma-dev/feedback-plugin?logo=github)](https://github.com/vasharma-dev/feedback-plugin/stargazers)
+[![Last commit](https://img.shields.io/github/last-commit/vasharma-dev/feedback-plugin?logo=git&logoColor=white)](https://github.com/vasharma-dev/feedback-plugin/commits/main)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Express](https://img.shields.io/badge/Express-000000?logo=express&logoColor=white)](https://expressjs.com/)
