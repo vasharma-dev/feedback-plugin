@@ -1,0 +1,111 @@
+// Data model — mirrors DESIGN.md §6.
+//
+// Using SQLite so the prototype runs with zero setup (the DB is a single file).
+// To go to Postgres: change `provider = "postgresql"` below and point DATABASE_URL at it.
+// SQLite has no enum / JSON / array types, so those fields are String (JSON-encoded);
+// on Postgres you'd switch them to enums and Json columns.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id        String   @id
+  name      String
+  plan      String   @default("free") // free | pro | enterprise
+  createdAt DateTime @default(now())
+
+  // ---- Billing / subscription (prototype: simulated "test mode", Stripe-ready) ----
+  billingEmail       String?
+  subStatus          String    @default("active") // active | past_due | canceled | trialing
+  currentPeriodStart DateTime  @default(now()) // start of the usage/billing window
+  currentPeriodEnd   DateTime? // informational; shown in the dashboard
+  // Card "on file" — in real Stripe we'd only ever store these display-safe bits.
+  cardBrand    String?
+  cardLast4    String?
+  cardExpMonth Int?
+  cardExpYear  Int?
+
+  projects Project[]
+  apiKeys  ApiKey[]
+  feedback Feedback[]
+  payments Payment[]
+}
+
+model Project {
+  id             String     @id
+  tenantId       String
+  name           String
+  themeColor     String     @default("#6C2BD9")
+  themePosition  String     @default("bottom-right")
+  allowedOrigins String     @default("[\"*\"]") // JSON array of origins
+  tenant         Tenant     @relation(fields: [tenantId], references: [id])
+  apiKeys        ApiKey[]
+  feedback       Feedback[]
+
+  @@index([tenantId])
+}
+
+model ApiKey {
+  id        String   @id
+  tenantId  String
+  projectId String? // public keys belong to a project; secret keys are tenant-wide
+  key       String   @unique // prototype: plaintext. Production: store a hash only.
+  kind      String // public | secret
+  active    Boolean  @default(true)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  project   Project? @relation(fields: [projectId], references: [id])
+}
+
+model Feedback {
+  id          String       @id
+  projectId   String
+  tenantId    String
+  type        String // bug | idea | praise | question
+  message     String
+  rating      Int? // 1..5
+  status      String       @default("new") // new | in_progress | done | wont_do
+  endUser     String? // JSON: { id?, email? }
+  metadata    String       @default("{}") // JSON: url/browser/os/device/...
+  createdAt   DateTime     @default(now())
+  project     Project      @relation(fields: [projectId], references: [id])
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  attachments Attachment[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, type])
+}
+
+// A billing transaction / invoice line. In the prototype these are simulated charges;
+// with real Stripe each row would mirror a Stripe Invoice / PaymentIntent.
+model Payment {
+  id          String   @id
+  tenantId    String
+  plan        String // plan purchased
+  amountCents Int
+  currency    String   @default("usd")
+  status      String   @default("paid") // paid | failed | refunded
+  cardBrand   String?
+  cardLast4   String?
+  description String
+  periodStart DateTime @default(now())
+  periodEnd   DateTime?
+  createdAt   DateTime @default(now())
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+model Attachment {
+  id         String   @id
+  feedbackId String
+  filename   String
+  mime       String
+  dataUrl    String // prototype inlines as data URL; production stores an S3/R2 URL
+  feedback   Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+}

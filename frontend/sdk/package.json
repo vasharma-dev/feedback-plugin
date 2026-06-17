@@ -1,0 +1,12 @@
+{
+  "name": "@jicama/feedback",
+  "version": "0.1.0",
+  "description": "JavaScript/TypeScript SDK for the jicama.tech feedback plugin.",
+  "type": "module",
+  "main": "src/index.js",
+  "module": "src/index.js",
+  "types": "src/index.d.ts",
+  "files": ["src"],
+  "keywords": ["feedback", "widget", "jicama"],
+  "license": "MIT"
+}

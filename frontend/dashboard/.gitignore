@@ -1,0 +1,4 @@
+node_modules/
+*.tsbuildinfo
+# dist/ is intentionally NOT ignored — the backend serves the prebuilt app at /dashboard
+# so `cd backend && npm run dev` works with no separate build step.

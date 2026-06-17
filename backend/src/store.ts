@@ -1,0 +1,679 @@
+// Data-access layer — now backed by Prisma/SQLite (was in-memory).
+//
+// The rest of the app imports only these functions, so the storage swap touched
+// nothing above it. The exported signatures match the domain types in types.ts;
+// all functions are async because the DB is.
+
+import { nanoid } from "nanoid";
+import { prisma } from "./db.js";
+import { getPlan, type PlanId } from "./plans.js";
+import type {
+  ApiKey,
+  Attachment,
+  CardOnFile,
+  Feedback,
+  FeedbackStatus,
+  FeedbackType,
+  Payment,
+  Plan,
+  Project,
+  Tenant,
+} from "./types.js";
+
+// Fixed demo keys the widget/SDK/dashboard use out of the box.
+export const DEMO = {
+  publicKey: "pk_demo_acme_123",
+  secretKey: "sk_demo_acme_456",
+};
+
+// A second seeded org, to demonstrate tenant isolation (its dashboard only ever
+// shows its own feedback — never Acme's).
+export const DEMO2 = {
+  publicKey: "pk_demo_globex_789",
+  secretKey: "sk_demo_globex_012",
+};
+
+// ---- Row → domain mappers (decode the JSON-encoded SQLite columns) ----
+type ProjectRow = {
+  id: string;
+  tenantId: string;
+  name: string;
+  themeColor: string;
+  themePosition: string;
+  allowedOrigins: string;
+};
+
+function toProject(r: ProjectRow): Project {
+  return {
+    id: r.id,
+    tenantId: r.tenantId,
+    name: r.name,
+    settings: {
+      theme: { color: r.themeColor, position: r.themePosition as Project["settings"]["theme"]["position"] },
+      allowedOrigins: JSON.parse(r.allowedOrigins) as string[],
+    },
+  };
+}
+
+type TenantRow = {
+  id: string;
+  name: string;
+  plan: string;
+  createdAt: Date;
+  billingEmail: string | null;
+  subStatus: string;
+  currentPeriodStart: Date;
+  currentPeriodEnd: Date | null;
+  cardBrand: string | null;
+  cardLast4: string | null;
+  cardExpMonth: number | null;
+  cardExpYear: number | null;
+};
+
+function toTenant(r: TenantRow): Tenant {
+  return {
+    id: r.id,
+    name: r.name,
+    plan: r.plan as Plan,
+    createdAt: r.createdAt.toISOString(),
+    billingEmail: r.billingEmail,
+    subStatus: r.subStatus as Tenant["subStatus"],
+    currentPeriodStart: r.currentPeriodStart.toISOString(),
+    currentPeriodEnd: r.currentPeriodEnd ? r.currentPeriodEnd.toISOString() : null,
+    card:
+      r.cardBrand && r.cardLast4 && r.cardExpMonth && r.cardExpYear
+        ? { brand: r.cardBrand, last4: r.cardLast4, expMonth: r.cardExpMonth, expYear: r.cardExpYear }
+        : null,
+  };
+}
+
+type PaymentRow = {
+  id: string;
+  tenantId: string;
+  plan: string;
+  amountCents: number;
+  currency: string;
+  status: string;
+  cardBrand: string | null;
+  cardLast4: string | null;
+  description: string;
+  periodStart: Date;
+  periodEnd: Date | null;
+  createdAt: Date;
+};
+
+function toPayment(r: PaymentRow): Payment {
+  return {
+    id: r.id,
+    tenantId: r.tenantId,
+    plan: r.plan as Plan,
+    amountCents: r.amountCents,
+    currency: r.currency,
+    status: r.status as Payment["status"],
+    cardBrand: r.cardBrand,
+    cardLast4: r.cardLast4,
+    description: r.description,
+    periodStart: r.periodStart.toISOString(),
+    periodEnd: r.periodEnd ? r.periodEnd.toISOString() : null,
+    createdAt: r.createdAt.toISOString(),
+  };
+}
+
+type FeedbackRow = {
+  id: string;
+  projectId: string;
+  tenantId: string;
+  type: string;
+  message: string;
+  rating: number | null;
+  status: string;
+  endUser: string | null;
+  metadata: string;
+  createdAt: Date;
+  attachments: Attachment[];
+};
+
+function toFeedback(r: FeedbackRow): Feedback {
+  return {
+    id: r.id,
+    projectId: r.projectId,
+    tenantId: r.tenantId,
+    type: r.type as FeedbackType,
+    message: r.message,
+    rating: r.rating,
+    status: r.status as FeedbackStatus,
+    endUser: r.endUser ? JSON.parse(r.endUser) : null,
+    metadata: JSON.parse(r.metadata),
+    attachments: r.attachments.map((a) => ({
+      id: a.id,
+      filename: a.filename,
+      mime: a.mime,
+      dataUrl: a.dataUrl,
+    })),
+    createdAt: r.createdAt.toISOString(),
+  };
+}
+
+// ---- Auth lookups ----
+export async function findApiKey(key: string): Promise<ApiKey | undefined> {
+  const k = await prisma.apiKey.findUnique({ where: { key } });
+  if (!k || !k.active) return undefined;
+  return {
+    id: k.id,
+    tenantId: k.tenantId,
+    projectId: k.projectId,
+    key: k.key,
+    kind: k.kind as ApiKey["kind"],
+    active: k.active,
+  };
+}
+
+export async function getProject(id: string): Promise<Project | undefined> {
+  const p = await prisma.project.findUnique({ where: { id } });
+  return p ? toProject(p) : undefined;
+}
+
+export async function listProjects(tenantId: string): Promise<Project[]> {
+  const rows = await prisma.project.findMany({ where: { tenantId } });
+  return rows.map(toProject);
+}
+
+// ---- Feedback ----
+export interface CreateFeedbackInput {
+  projectId: string;
+  tenantId: string;
+  type: FeedbackType;
+  message: string;
+  rating: number | null;
+  endUser: { id?: string; email?: string } | null;
+  metadata: Record<string, unknown>;
+  attachments: Array<{ filename: string; mime: string; dataUrl: string }>;
+}
+
+export async function createFeedback(input: CreateFeedbackInput): Promise<Feedback> {
+  const row = await prisma.feedback.create({
+    data: {
+      id: `fb_${nanoid(10)}`,
+      projectId: input.projectId,
+      tenantId: input.tenantId,
+      type: input.type,
+      message: input.message,
+      rating: input.rating,
+      status: "new",
+      endUser: input.endUser ? JSON.stringify(input.endUser) : null,
+      metadata: JSON.stringify(input.metadata ?? {}),
+      attachments: {
+        create: input.attachments.map((a) => ({
+          id: `att_${nanoid(10)}`,
+          filename: a.filename,
+          mime: a.mime,
+          dataUrl: a.dataUrl,
+        })),
+      },
+    },
+    include: { attachments: true },
+  });
+  return toFeedback(row);
+}
+
+export interface FeedbackQuery {
+  tenantId: string;
+  projectId?: string;
+  status?: FeedbackStatus;
+  type?: FeedbackType;
+  q?: string;
+}
+
+export async function queryFeedback(query: FeedbackQuery): Promise<Feedback[]> {
+  const rows = await prisma.feedback.findMany({
+    where: {
+      tenantId: query.tenantId,
+      projectId: query.projectId,
+      status: query.status,
+      type: query.type,
+      message: query.q ? { contains: query.q } : undefined, // LIKE is case-insensitive on SQLite ASCII
+    },
+    include: { attachments: true },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map(toFeedback);
+}
+
+export async function updateFeedbackStatus(
+  tenantId: string,
+  id: string,
+  status: FeedbackStatus
+): Promise<Feedback | undefined> {
+  // updateMany scoped by tenantId enforces isolation — a wrong tenant updates 0 rows.
+  const res = await prisma.feedback.updateMany({ where: { id, tenantId }, data: { status } });
+  if (res.count === 0) return undefined;
+  const row = await prisma.feedback.findUnique({ where: { id }, include: { attachments: true } });
+  return row ? toFeedback(row) : undefined;
+}
+
+export async function statsFor(tenantId: string) {
+  const items = await prisma.feedback.findMany({
+    where: { tenantId },
+    select: { status: true, type: true, rating: true },
+  });
+  const by = (pick: (f: { status: string; type: string }) => string) =>
+    items.reduce<Record<string, number>>((acc, f) => {
+      const k = pick(f);
+      acc[k] = (acc[k] ?? 0) + 1;
+      return acc;
+    }, {});
+  const rated = items.filter((f) => typeof f.rating === "number");
+  return {
+    total: items.length,
+    byStatus: by((f) => f.status),
+    byType: by((f) => f.type),
+    avgRating: rated.length
+      ? Number((rated.reduce((s, f) => s + (f.rating ?? 0), 0) / rated.length).toFixed(2))
+      : null,
+  };
+}
+
+// ====================================================================================
+// Billing & accounts (prototype: simulated "test mode" — no real money moves)
+// ====================================================================================
+
+// A typed, HTTP-aware error so the API layer can translate failures into clean responses
+// instead of generic 500s.
+export class BillingError extends Error {
+  status: number;
+  code: string;
+  constructor(status: number, code: string, message?: string) {
+    super(message ?? code);
+    this.status = status;
+    this.code = code;
+  }
+}
+
+export interface CardInput {
+  number: string;
+  expMonth: number;
+  expYear: number;
+  cvc: string;
+  name?: string;
+}
+
+function luhnValid(digits: string): boolean {
+  let sum = 0;
+  let alt = false;
+  for (let i = digits.length - 1; i >= 0; i--) {
+    let d = digits.charCodeAt(i) - 48;
+    if (d < 0 || d > 9) return false;
+    if (alt) {
+      d *= 2;
+      if (d > 9) d -= 9;
+    }
+    sum += d;
+    alt = !alt;
+  }
+  return sum % 10 === 0;
+}
+
+function detectBrand(digits: string): string {
+  if (/^4/.test(digits)) return "Visa";
+  if (/^(5[1-5]|2[2-7])/.test(digits)) return "Mastercard";
+  if (/^3[47]/.test(digits)) return "Amex";
+  if (/^6/.test(digits)) return "Discover";
+  return "Card";
+}
+
+// Stripe's well-known test card that always declines, so the demo can show a failure path.
+const DECLINE_CARD = "4000000000000002";
+
+/**
+ * Validate a card and "charge" it. In test mode this never contacts a payment processor:
+ * it Luhn-checks the number, validates expiry/cvc, and simulates approval/decline.
+ * Returns the display-safe card details to persist. Throws BillingError on bad/declined cards.
+ */
+function chargeCard(card: CardInput, _amountCents: number): CardOnFile {
+  const number = String(card.number || "").replace(/[\s-]/g, "");
+  if (!/^\d{13,19}$/.test(number) || !luhnValid(number)) {
+    throw new BillingError(402, "card_invalid", "That card number looks invalid.");
+  }
+  const now = new Date();
+  const expMonth = Number(card.expMonth);
+  const expYear = Number(card.expYear);
+  if (!(expMonth >= 1 && expMonth <= 12)) {
+    throw new BillingError(402, "card_exp_invalid", "Invalid expiry month.");
+  }
+  // Card is valid through the last day of its expiry month.
+  const expiresEnd = new Date(expYear, expMonth, 1).getTime();
+  if (Number.isNaN(expiresEnd) || expiresEnd <= now.getTime()) {
+    throw new BillingError(402, "card_expired", "That card has expired.");
+  }
+  if (!/^\d{3,4}$/.test(String(card.cvc || ""))) {
+    throw new BillingError(402, "card_cvc_invalid", "Invalid security code.");
+  }
+  if (number === DECLINE_CARD) {
+    throw new BillingError(402, "card_declined", "Your card was declined.");
+  }
+  return { brand: detectBrand(number), last4: number.slice(-4), expMonth, expYear };
+}
+
+function addDays(d: Date, days: number): Date {
+  return new Date(d.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
+function genKey(prefix: "pk" | "sk"): string {
+  return `${prefix}_${nanoid(20)}`;
+}
+
+/** Count feedback submitted in the tenant's current billing window. */
+export async function usageForPeriod(tenantId: string, periodStart: Date): Promise<number> {
+  return prisma.feedback.count({ where: { tenantId, createdAt: { gte: periodStart } } });
+}
+
+export async function getTenant(tenantId: string): Promise<Tenant | undefined> {
+  const t = await prisma.tenant.findUnique({ where: { id: tenantId } });
+  return t ? toTenant(t) : undefined;
+}
+
+export interface BillingSummary {
+  tenant: Tenant;
+  usage: { used: number; quota: number; remaining: number };
+}
+
+export async function getBilling(tenantId: string): Promise<BillingSummary | undefined> {
+  const t = await prisma.tenant.findUnique({ where: { id: tenantId } });
+  if (!t) return undefined;
+  const tenant = toTenant(t);
+  const quota = getPlan(tenant.plan).monthlyQuota;
+  const used = await usageForPeriod(tenantId, t.currentPeriodStart);
+  return { tenant, usage: { used, quota, remaining: Math.max(0, quota - used) } };
+}
+
+export async function listPayments(tenantId: string): Promise<Payment[]> {
+  const rows = await prisma.payment.findMany({
+    where: { tenantId },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map(toPayment);
+}
+
+async function recordPayment(opts: {
+  tenantId: string;
+  plan: PlanId;
+  amountCents: number;
+  card: CardOnFile | null;
+  description: string;
+  periodStart: Date;
+  periodEnd: Date;
+}): Promise<Payment> {
+  const row = await prisma.payment.create({
+    data: {
+      id: `pay_${nanoid(12)}`,
+      tenantId: opts.tenantId,
+      plan: opts.plan,
+      amountCents: opts.amountCents,
+      currency: "usd",
+      status: "paid",
+      cardBrand: opts.card?.brand ?? null,
+      cardLast4: opts.card?.last4 ?? null,
+      description: opts.description,
+      periodStart: opts.periodStart,
+      periodEnd: opts.periodEnd,
+    },
+  });
+  return toPayment(row);
+}
+
+export interface CreateAccountInput {
+  company: string;
+  billingEmail: string;
+  plan: PlanId;
+  card?: CardInput;
+}
+
+export interface CreatedAccount {
+  tenant: Tenant;
+  project: Project;
+  publicKey: string;
+  secretKey: string;
+}
+
+/**
+ * Self-serve org signup: creates an isolated tenant + project + its own API keys, applies the
+ * chosen plan (charging the card for paid plans), and returns the plaintext keys ONCE so the
+ * org can copy them. Everything this org's widget collects is scoped to this tenant.
+ */
+export async function createTenantAccount(input: CreateAccountInput): Promise<CreatedAccount> {
+  const plan = getPlan(input.plan);
+  const company = input.company.trim();
+  if (!company) throw new BillingError(422, "company_required", "Company name is required.");
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(input.billingEmail || "")) {
+    throw new BillingError(422, "email_invalid", "A valid billing email is required.");
+  }
+
+  // Paid plans require a card; charge it before creating anything persistent.
+  let card: CardOnFile | null = null;
+  if (plan.priceCents > 0) {
+    if (!input.card) throw new BillingError(402, "card_required", "Payment details are required for paid plans.");
+    card = chargeCard(input.card, plan.priceCents);
+  }
+
+  const now = new Date();
+  const periodEnd = addDays(now, 30);
+  const tenantId = `ten_${nanoid(10)}`;
+  const projectId = `prj_${nanoid(10)}`;
+  const publicKey = genKey("pk");
+  const secretKey = genKey("sk");
+
+  const created = await prisma.tenant.create({
+    data: {
+      id: tenantId,
+      name: company,
+      plan: plan.id,
+      billingEmail: input.billingEmail.trim(),
+      subStatus: "active",
+      currentPeriodStart: now,
+      currentPeriodEnd: periodEnd,
+      cardBrand: card?.brand ?? null,
+      cardLast4: card?.last4 ?? null,
+      cardExpMonth: card?.expMonth ?? null,
+      cardExpYear: card?.expYear ?? null,
+      projects: {
+        create: {
+          id: projectId,
+          name: `${company} — Web`,
+          themeColor: "#6C2BD9",
+          themePosition: "bottom-right",
+          allowedOrigins: JSON.stringify(["*"]),
+        },
+      },
+      apiKeys: {
+        create: [
+          { id: `key_${nanoid(8)}`, projectId, key: publicKey, kind: "public" },
+          { id: `key_${nanoid(8)}`, projectId: null, key: secretKey, kind: "secret" },
+        ],
+      },
+    },
+  });
+
+  if (plan.priceCents > 0) {
+    await recordPayment({
+      tenantId,
+      plan: plan.id,
+      amountCents: plan.priceCents,
+      card,
+      description: `${plan.name} plan — initial subscription`,
+      periodStart: now,
+      periodEnd,
+    });
+  }
+
+  const project = await getProject(projectId);
+  return { tenant: toTenant(created), project: project!, publicKey, secretKey };
+}
+
+/**
+ * Change a tenant's plan (upgrade/downgrade). Paid plans charge a card — a freshly supplied
+ * one, or the card already on file. Starts a new billing period on change.
+ */
+export async function changePlan(
+  tenantId: string,
+  planId: PlanId,
+  newCard?: CardInput
+): Promise<BillingSummary> {
+  const existing = await prisma.tenant.findUnique({ where: { id: tenantId } });
+  if (!existing) throw new BillingError(404, "tenant_not_found");
+  const plan = getPlan(planId);
+  const now = new Date();
+  const periodEnd = addDays(now, 30);
+
+  let card: CardOnFile | null = existing.cardBrand && existing.cardLast4 && existing.cardExpMonth && existing.cardExpYear
+    ? { brand: existing.cardBrand, last4: existing.cardLast4, expMonth: existing.cardExpMonth, expYear: existing.cardExpYear }
+    : null;
+
+  if (plan.priceCents > 0) {
+    if (newCard) {
+      card = chargeCard(newCard, plan.priceCents);
+    } else if (card) {
+      // Re-use the card on file (re-validate the simulated charge path).
+      // No new card details to validate; treat the stored card as chargeable.
+    } else {
+      throw new BillingError(402, "card_required", "Payment details are required for paid plans.");
+    }
+  }
+
+  await prisma.tenant.update({
+    where: { id: tenantId },
+    data: {
+      plan: plan.id,
+      subStatus: "active",
+      currentPeriodStart: now,
+      currentPeriodEnd: periodEnd,
+      cardBrand: card?.brand ?? existing.cardBrand,
+      cardLast4: card?.last4 ?? existing.cardLast4,
+      cardExpMonth: card?.expMonth ?? existing.cardExpMonth,
+      cardExpYear: card?.expYear ?? existing.cardExpYear,
+    },
+  });
+
+  if (plan.priceCents > 0) {
+    await recordPayment({
+      tenantId,
+      plan: plan.id,
+      amountCents: plan.priceCents,
+      card,
+      description: `Switched to ${plan.name} plan`,
+      periodStart: now,
+      periodEnd,
+    });
+  }
+
+  const summary = await getBilling(tenantId);
+  return summary!;
+}
+
+// ---- Idempotent seed (runs on boot; safe to call repeatedly) ----
+async function seedTenant(opts: {
+  tenantId: string;
+  name: string;
+  plan: PlanId;
+  projectId: string;
+  projectName: string;
+  publicKey: string;
+  secretKey: string;
+  card: CardOnFile | null;
+  url: string;
+  samples: Array<{ type: FeedbackType; message: string; rating: number }>;
+}) {
+  if (await prisma.tenant.findUnique({ where: { id: opts.tenantId } })) return;
+  const now = new Date();
+  await prisma.tenant.create({
+    data: {
+      id: opts.tenantId,
+      name: opts.name,
+      plan: opts.plan,
+      billingEmail: `billing@${opts.url.replace(/^https?:\/\//, "").split("/")[0]}`,
+      subStatus: "active",
+      currentPeriodStart: now,
+      currentPeriodEnd: addDays(now, 30),
+      cardBrand: opts.card?.brand ?? null,
+      cardLast4: opts.card?.last4 ?? null,
+      cardExpMonth: opts.card?.expMonth ?? null,
+      cardExpYear: opts.card?.expYear ?? null,
+      projects: {
+        create: {
+          id: opts.projectId,
+          name: opts.projectName,
+          themeColor: "#6C2BD9",
+          themePosition: "bottom-right",
+          allowedOrigins: JSON.stringify(["*"]),
+        },
+      },
+      apiKeys: {
+        create: [
+          { id: `key_pub_${nanoid(6)}`, projectId: opts.projectId, key: opts.publicKey, kind: "public" },
+          { id: `key_sec_${nanoid(6)}`, projectId: null, key: opts.secretKey, kind: "secret" },
+        ],
+      },
+    },
+  });
+
+  const plan = getPlan(opts.plan);
+  if (plan.priceCents > 0 && opts.card) {
+    await recordPayment({
+      tenantId: opts.tenantId,
+      plan: opts.plan,
+      amountCents: plan.priceCents,
+      card: opts.card,
+      description: `${plan.name} plan — subscription`,
+      periodStart: now,
+      periodEnd: addDays(now, 30),
+    });
+  }
+
+  for (const s of opts.samples) {
+    await createFeedback({
+      projectId: opts.projectId,
+      tenantId: opts.tenantId,
+      type: s.type,
+      message: s.message,
+      rating: s.rating,
+      endUser: null,
+      metadata: { url: opts.url, browser: "seed", os: "seed" },
+      attachments: [],
+    });
+  }
+}
+
+export async function ensureSeed() {
+  await seedTenant({
+    tenantId: "ten_acme",
+    name: "Acme Inc.",
+    plan: "pro",
+    projectId: "prj_acme_web",
+    projectName: "Acme Web App",
+    publicKey: DEMO.publicKey,
+    secretKey: DEMO.secretKey,
+    card: { brand: "Visa", last4: "4242", expMonth: 12, expYear: new Date().getFullYear() + 2 },
+    url: "https://acme.example/app",
+    samples: [
+      { type: "bug", message: "Export button does nothing on Safari.", rating: 2 },
+      { type: "idea", message: "Please add dark mode 🙏", rating: 5 },
+      { type: "praise", message: "Onboarding was super smooth, thanks!", rating: 5 },
+    ],
+  });
+
+  // Second org — proves isolation: its dashboard (sk_demo_globex_012) only ever sees these.
+  await seedTenant({
+    tenantId: "ten_globex",
+    name: "Globex Corp.",
+    plan: "free",
+    projectId: "prj_globex_web",
+    projectName: "Globex Portal",
+    publicKey: DEMO2.publicKey,
+    secretKey: DEMO2.secretKey,
+    card: null,
+    url: "https://globex.example",
+    samples: [
+      { type: "question", message: "How do I reset my API token?", rating: 4 },
+      { type: "bug", message: "Invoices PDF is blank on Firefox.", rating: 1 },
+    ],
+  });
+}

@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+# Exception: the dashboard ships a prebuilt dist/ so the backend can serve it
+# at /dashboard with no separate build step (see frontend/dashboard/.gitignore).
+!frontend/dashboard/dist/
+!frontend/dashboard/dist/**
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Databases (SQLite prototype store)
+*.db
+*.db-journal
+*.sqlite
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
