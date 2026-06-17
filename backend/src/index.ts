@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import cors from "cors";
 import express from "express";
 import { adminRouter } from "./api/admin.js";
+import { accountRouter, authRouter } from "./api/auth.js";
 import { billingRouter, publicBillingRouter } from "./api/billing.js";
 import { ingestRouter } from "./api/ingest.js";
 import { DEMO, DEMO2, ensureSeed } from "./store.js";
@@ -16,10 +17,27 @@ const PORT = Number(process.env.PORT ?? 4000);
 // Real auth is the API key, not the origin (origin is additionally checked per project).
 app.use(cors());
 app.use(express.json({ limit: "6mb" })); // generous for inlined screenshots in the prototype
+app.use(express.urlencoded({ extended: false })); // the mock Google sign-in posts a form
+
+// Minimal cookie parser (avoids a dependency) — populates req.cookies from the header.
+app.use((req, _res, next) => {
+  const header = req.headers.cookie;
+  const jar: Record<string, string> = {};
+  if (header) {
+    for (const part of header.split(";")) {
+      const eq = part.indexOf("=");
+      if (eq > 0) jar[part.slice(0, eq).trim()] = decodeURIComponent(part.slice(eq + 1).trim());
+    }
+  }
+  req.cookies = jar;
+  next();
+});
 
 app.get("/health", (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
 
-// Three logical surfaces from DESIGN.md §3, plus billing/accounts.
+// Three logical surfaces from DESIGN.md §3, plus billing/accounts/auth.
+app.use("/auth", authRouter); // simulated Google login + logout
+app.use("/v1", accountRouter); // GET /v1/me, POST /v1/onboarding (session)
 app.use("/v1", publicBillingRouter); // public: GET /v1/plans, POST /v1/signup
 app.use("/v1", ingestRouter); // public, API-key authed ingest
 app.use("/v1/admin", adminRouter); // dashboard / admin
@@ -36,6 +54,13 @@ app.get("/demo", (_req, res) =>
 // Self-serve signup / pricing page (the "buy the plugin" flow).
 app.get("/signup", (_req, res) =>
   res.sendFile(path.join(frontendDir, "signup", "index.html"))
+);
+// Simulated "Sign in with Google" page + the post-login onboarding form.
+app.get("/auth/google", (_req, res) =>
+  res.sendFile(path.join(frontendDir, "auth", "google.html"))
+);
+app.get("/onboarding", (_req, res) =>
+  res.sendFile(path.join(frontendDir, "onboarding", "index.html"))
 );
 
 // Dashboard = the built React + Vite app. Serve its dist if present; otherwise a hint.

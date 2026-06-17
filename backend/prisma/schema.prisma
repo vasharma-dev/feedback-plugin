@@ -35,6 +35,35 @@ model Tenant {
   apiKeys  ApiKey[]
   feedback Feedback[]
   payments Payment[]
+  users    User[]
+}
+
+// A human account (the customer/admin). Created on first "Sign in with Google";
+// linked to a Tenant once they complete onboarding. Auth in the prototype is a
+// simulated Google login — swap mockGoogleProfile() for a real OAuth callback later.
+model User {
+  id        String   @id
+  email     String   @unique
+  name      String?
+  avatarUrl String?
+  googleId  String?  @unique // the Google "sub"; mocked in the prototype
+  tenantId  String? // null until onboarding creates/links an org
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+  createdAt DateTime @default(now())
+  sessions  Session[]
+
+  @@index([tenantId])
+}
+
+// Opaque session token stored in an httpOnly cookie. One row per active login.
+model Session {
+  id        String   @id // the session token itself (random, unguessable)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([userId])
 }
 
 model Project {

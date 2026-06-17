@@ -37,9 +37,17 @@ Then open:
 | URL | What |
 |-----|------|
 | http://localhost:4000/demo | A pretend tenant app with the widget embedded (try the 💬 button) |
-| http://localhost:4000/signup | **Pricing + self-serve signup** — an org "buys" the plugin, picks a plan, pays (test mode), and gets its own keys + dashboard |
-| http://localhost:4000/dashboard | The tenant admin console (React + Vite + Tailwind) — **Feedback inbox** + **Billing & plan** tabs |
+| http://localhost:4000/signup | **Pricing + self-serve signup** — pick a plan & pay (test mode), or **Continue with Google** for instant onboarding |
+| http://localhost:4000/auth/google | **Simulated "Sign in with Google"** → onboarding form → personalized dashboard |
+| http://localhost:4000/dashboard | The tenant admin console (React + Vite + Tailwind) — **Feedback inbox**, **Billing**, **Settings** tabs |
 | http://localhost:4000/health | Health check |
+
+> **Sign-in is a simulated Google login** (test mode) — no Google Cloud setup, works offline.
+> Clicking "Sign in with Google" creates a user + an httpOnly session cookie; first-timers complete
+> a short onboarding form that creates their org, then land on their own dashboard (no key-pasting).
+> The admin API accepts **either** that session **or** a secret key, so the legacy `?key=sk_…` flow
+> still works. Swapping in real Google OAuth is localized to `backend/src/auth/session.ts`
+> (`mockGoogleProfile`) + the `/auth/google/callback` route.
 
 > **Billing runs in simulated "test mode"** — no real charges. Use card `4242 4242 4242 4242`
 > (any future expiry + CVC) to succeed, or `4000 0000 0000 0002` to see a decline. The code is
@@ -81,14 +89,14 @@ cd backend
 npm run smoke
 ```
 
-It runs 40 checks across the whole system — ingest, auth/trust separation, validation, spam
+It runs 51 checks across the whole system — ingest, auth/trust separation, validation, spam
 honeypot, admin stats/list/filter/patch, **plans/signup, billing + simulated payments (incl.
-declined cards), plan quotas, multi-tenant isolation, per-project origin lock-down**, and that
-the widget + signup + React dashboard are served — printing ✅/❌ per check and exiting non-zero
-on any failure. Expected:
+declined cards), plan quotas, multi-tenant isolation, per-project origin lock-down, simulated
+Google login → onboarding → session-based dashboard**, and that the widget + signup + React
+dashboard are served — printing ✅/❌ per check and exiting non-zero on any failure. Expected:
 
 ```
-✅ ALL PASS — 40 passed, 0 failed
+✅ ALL PASS — 51 passed, 0 failed
 ```
 
 ## The three integration surfaces (DESIGN.md §2)
@@ -168,6 +176,10 @@ because the page and API share an origin — across projects you must set it.)
 | GET  | `/v1/config` | public key | Widget pulls project theme |
 | GET  | `/v1/plans` | — | Plan catalogue (free/pro/enterprise) for the pricing page |
 | POST | `/v1/signup` | — | Self-serve org signup → creates an isolated tenant + keys (charges card for paid plans) |
+| POST | `/auth/google/callback` | — | Simulated "Sign in with Google" → creates/finds the user + a session cookie |
+| POST | `/auth/logout` | session | End the session |
+| GET  | `/v1/me` | session | Current user + org (drives the dashboard & onboarding) |
+| POST | `/v1/onboarding` | session | Create the org for a signed-in user (first-time setup) |
 | GET  | `/v1/admin/feedback` | secret key | List/filter feedback |
 | PATCH| `/v1/admin/feedback/:id` | secret key | Change status |
 | GET  | `/v1/admin/stats` | secret key | Counts + avg rating |

@@ -4,7 +4,8 @@
 //   - requireSecretKey: dashboard/admin. Tenant-wide. Never accepted on ingest routes.
 
 import type { NextFunction, Request, Response } from "express";
-import { findApiKey, getProject } from "../store.js";
+import { readSessionCookie } from "../auth/session.js";
+import { findApiKey, getProject, getSessionUser } from "../store.js";
 import type { ApiKey, Project } from "../types.js";
 
 // Augment Express's Request with what the guards resolve.
@@ -14,6 +15,9 @@ declare global {
     interface Request {
       apiKey?: ApiKey;
       project?: Project;
+      cookies?: Record<string, string>;
+      tenantId?: string; // resolved tenant (from a secret key OR a session cookie)
+      userId?: string; // resolved user id (session path only)
     }
   }
 }
@@ -61,6 +65,37 @@ export async function requireSecretKey(req: Request, res: Response, next: NextFu
     if (apiKey.kind !== "secret") return res.status(403).json({ error: "secret_key_required" });
     req.apiKey = apiKey;
     next();
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Admin/dashboard guard that accepts EITHER a secret key (programmatic / legacy) OR a logged-in
+ * session cookie (the Google sign-in flow). Either way it resolves `req.tenantId`, which every
+ * admin route is scoped to. A Bearer key that isn't a valid secret is still rejected exactly as
+ * `requireSecretKey` would (401 unknown / 403 wrong kind), so existing clients are unaffected.
+ */
+export async function resolveTenant(req: Request, res: Response, next: NextFunction) {
+  try {
+    // 1) Explicit API key wins (Authorization: Bearer sk_… or ?key=).
+    const key = extractKey(req);
+    if (key) {
+      const apiKey = await findApiKey(key);
+      if (!apiKey) return res.status(401).json({ error: "invalid_api_key" });
+      if (apiKey.kind !== "secret") return res.status(403).json({ error: "secret_key_required" });
+      req.apiKey = apiKey;
+      req.tenantId = apiKey.tenantId;
+      return next();
+    }
+    // 2) Otherwise fall back to the session cookie.
+    const user = await getSessionUser(readSessionCookie(req));
+    if (user?.tenantId) {
+      req.userId = user.id;
+      req.tenantId = user.tenantId;
+      return next();
+    }
+    return res.status(401).json({ error: "auth_required" });
   } catch (err) {
     next(err);
   }

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sign in - Google Accounts (simulated)</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f0f4f9;
+      font-family: "Google Sans", Roboto, system-ui, -apple-system, "Segoe UI", sans-serif; color: #202124; }
+    .card { background: #fff; width: min(450px, 94vw); border: 1px solid #dadce0; border-radius: 28px; padding: 40px 40px 28px; }
+    .glogo { font-size: 22px; font-weight: 500; letter-spacing: -.5px; }
+    .glogo b1 { color: #4285F4; } /* decorative spans below */
+    .g { font-weight: 500; }
+    h1 { font-size: 24px; font-weight: 400; margin: 16px 0 6px; }
+    p.sub { font-size: 16px; color: #202124; margin: 0 0 26px; }
+    label { display: block; font-size: 12px; color: #5f6368; margin: 14px 0 4px; }
+    input { width: 100%; padding: 13px 15px; font-size: 16px; border: 1px solid #dadce0; border-radius: 8px; outline: none; }
+    input:focus { border-color: #1a73e8; box-shadow: 0 0 0 1px #1a73e8; }
+    .acct { display: flex; align-items: center; gap: 12px; border: 1px solid #dadce0; border-radius: 12px; padding: 12px 14px; cursor: pointer; margin-bottom: 8px; transition: background .12s; }
+    .acct:hover { background: #f8faff; }
+    .av { width: 34px; height: 34px; border-radius: 999px; background: #6C2BD9; color: #fff; display: grid; place-items: center; font-weight: 600; }
+    .acct .em { font-size: 14px; color: #5f6368; }
+    .row { display: flex; align-items: center; justify-content: space-between; margin-top: 26px; }
+    .link { color: #1a73e8; font-weight: 500; font-size: 14px; text-decoration: none; background: none; border: none; cursor: pointer; padding: 8px; border-radius: 6px; }
+    .link:hover { background: #f0f6ff; }
+    .btn { background: #1a73e8; color: #fff; border: none; border-radius: 8px; padding: 10px 24px; font-size: 14px; font-weight: 500; cursor: pointer; }
+    .btn:hover { background: #1b66c9; box-shadow: 0 1px 3px rgba(60,64,67,.3); }
+    .note { margin-top: 22px; font-size: 12px; color: #80868b; text-align: center; }
+    .pill { display: inline-block; background: #fff4e5; color: #b06000; border: 1px solid #ffe0b2; border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight: 600; }
+    #another { display: none; }
+  </style>
+</head>
+<body>
+  <form class="card" method="POST" action="/auth/google/callback">
+    <div class="glogo"><span style="color:#4285F4">G</span><span style="color:#EA4335">o</span><span style="color:#FBBC05">o</span><span style="color:#4285F4">g</span><span style="color:#34A853">l</span><span style="color:#EA4335">e</span></div>
+    <h1>Choose an account</h1>
+    <p class="sub">to continue to <b>jicama feedback</b></p>
+
+    <!-- A pretend, prefilled account you can click to continue instantly. -->
+    <div class="acct" onclick="this.closest('form').submit()">
+      <div class="av">J</div>
+      <div>
+        <div class="g">Jicama Admin</div>
+        <div class="em">admin@jicama.tech</div>
+      </div>
+    </div>
+    <input type="hidden" name="name" value="Jicama Admin" />
+    <input type="hidden" name="email" value="admin@jicama.tech" />
+
+    <button type="button" class="link" onclick="useAnother()">＋ Use another account</button>
+
+    <div id="another">
+      <label for="n">Full name</label>
+      <input id="n" autocomplete="name" placeholder="Jane Doe" oninput="document.getElementsByName('name')[0].value=this.value" />
+      <label for="e">Email</label>
+      <input id="e" type="email" autocomplete="email" placeholder="you@company.com" oninput="document.getElementsByName('email')[0].value=this.value" />
+      <div class="row">
+        <span></span>
+        <button type="submit" class="btn">Next</button>
+      </div>
+    </div>
+
+    <p class="note"><span class="pill">SIMULATED</span> &nbsp;Demo sign-in — no real Google account is used.</p>
+  </form>
+
+  <script>
+    function useAnother() {
+      document.getElementById("another").style.display = "block";
+      // Clear the prefilled hidden values so the typed account is used instead.
+      document.getElementsByName("name")[0].value = "";
+      document.getElementsByName("email")[0].value = "";
+      document.querySelector(".acct").style.display = "none";
+      document.getElementById("e").focus();
+    }
+  </script>
+</body>
+</html>

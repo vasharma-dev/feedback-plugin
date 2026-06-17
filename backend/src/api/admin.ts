@@ -3,7 +3,7 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { requireSecretKey } from "../middleware/auth.js";
+import { resolveTenant } from "../middleware/auth.js";
 import {
   listProjects,
   queryFeedback,
@@ -14,12 +14,12 @@ import {
 
 export const adminRouter = Router();
 
-adminRouter.use(requireSecretKey);
+adminRouter.use(resolveTenant);
 
 // GET /v1/admin/projects
 adminRouter.get("/projects", async (req, res, next) => {
   try {
-    res.json({ projects: await listProjects(req.apiKey!.tenantId) });
+    res.json({ projects: await listProjects(req.tenantId!) });
   } catch (err) {
     next(err);
   }
@@ -70,7 +70,7 @@ adminRouter.patch("/projects/:id", async (req, res, next) => {
     // A literal "*" anywhere means "allow any" — collapse to the canonical wildcard.
     const origins = cleaned.includes("*") ? ["*"] : cleaned;
 
-    const updated = await updateProjectOrigins(req.apiKey!.tenantId, req.params.id, origins);
+    const updated = await updateProjectOrigins(req.tenantId!, req.params.id, origins);
     if (!updated) return res.status(404).json({ error: "not_found" });
     res.json(updated);
   } catch (err) {
@@ -81,7 +81,7 @@ adminRouter.patch("/projects/:id", async (req, res, next) => {
 // GET /v1/admin/stats
 adminRouter.get("/stats", async (req, res, next) => {
   try {
-    res.json(await statsFor(req.apiKey!.tenantId));
+    res.json(await statsFor(req.tenantId!));
   } catch (err) {
     next(err);
   }
@@ -99,7 +99,7 @@ adminRouter.get("/feedback", async (req, res, next) => {
   try {
     const parsed = querySchema.safeParse(req.query);
     if (!parsed.success) return res.status(422).json({ error: "validation_error" });
-    const items = await queryFeedback({ tenantId: req.apiKey!.tenantId, ...parsed.data });
+    const items = await queryFeedback({ tenantId: req.tenantId!, ...parsed.data });
     res.json({ items, count: items.length });
   } catch (err) {
     next(err);
@@ -116,7 +116,7 @@ adminRouter.patch("/feedback/:id", async (req, res, next) => {
     const parsed = patchSchema.safeParse(req.body);
     if (!parsed.success) return res.status(422).json({ error: "validation_error" });
     const updated = await updateFeedbackStatus(
-      req.apiKey!.tenantId,
+      req.tenantId!,
       req.params.id,
       parsed.data.status
     );

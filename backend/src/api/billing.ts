@@ -13,7 +13,7 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { requireSecretKey } from "../middleware/auth.js";
+import { resolveTenant } from "../middleware/auth.js";
 import { formatPrice, getPlan, isPlanId, PLANS } from "../plans.js";
 import {
   BillingError,
@@ -79,11 +79,11 @@ publicBillingRouter.post("/signup", async (req, res, next) => {
 
 // ---- secret-key: the tenant's own billing console ----
 export const billingRouter = Router();
-billingRouter.use(requireSecretKey);
+billingRouter.use(resolveTenant);
 
 billingRouter.get("/", async (req, res, next) => {
   try {
-    const summary = await getBilling(req.apiKey!.tenantId);
+    const summary = await getBilling(req.tenantId!);
     if (!summary) return res.status(404).json({ error: "tenant_not_found" });
     res.json({
       ...summary,
@@ -107,7 +107,7 @@ billingRouter.post("/checkout", async (req, res, next) => {
       return res.status(422).json({ error: "validation_error", details: parsed.error.flatten() });
     }
     const { plan, card } = parsed.data;
-    const summary = await changePlan(req.apiKey!.tenantId, isPlanId(plan) ? plan : "free", card);
+    const summary = await changePlan(req.tenantId!, isPlanId(plan) ? plan : "free", card);
     res.json({ ok: true, ...summary, plan: getPlan(summary.tenant.plan) });
   } catch (err) {
     if (err instanceof BillingError) {
@@ -119,7 +119,7 @@ billingRouter.post("/checkout", async (req, res, next) => {
 
 billingRouter.get("/invoices", async (req, res, next) => {
   try {
-    res.json({ invoices: await listPayments(req.apiKey!.tenantId) });
+    res.json({ invoices: await listPayments(req.tenantId!) });
   } catch (err) {
     next(err);
   }

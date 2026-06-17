@@ -267,6 +267,53 @@ async function main() {
   });
   ok("admin can re-open the key to any origin (200)", reopen.status === 200, `got ${reopen.status}`);
 
+  // ====================================================================================
+  // Simulated Google login → onboarding → session-based dashboard
+  // ====================================================================================
+  const cookieFrom = (res) => (res.headers.get("set-cookie")?.match(/jicama_sess=[^;]+/) || [""])[0];
+  const owner = `owner_${Date.now()}@smoke.test`;
+
+  // No session yet.
+  ok("/v1/me without a session → 401", (await fetch(`${BASE}/v1/me`)).status === 401);
+
+  // Mock "Sign in with Google" posts the chosen account; backend sets a session cookie.
+  const cb = await fetch(`${BASE}/auth/google/callback`, {
+    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ email: owner, name: "Smoke Owner" }).toString(),
+    redirect: "manual",
+  });
+  const cookie = cookieFrom(cb);
+  ok("Google sign-in redirects a new user to onboarding (302)",
+    cb.status === 302 && (cb.headers.get("location") || "").endsWith("/onboarding"), `got ${cb.status}`);
+  ok("Google sign-in issues a session cookie", /^jicama_sess=/.test(cookie));
+
+  const sess = { Cookie: cookie };
+  const me1 = await (await fetch(`${BASE}/v1/me`, { headers: sess })).json();
+  ok("/v1/me shows the user signed-in but not onboarded", me1.user?.email === owner && me1.onboarded === false);
+
+  // Complete onboarding → creates the org for this user.
+  const onboard = await fetch(`${BASE}/v1/onboarding`, {
+    method: "POST", headers: { ...sess, "Content-Type": "application/json" },
+    body: JSON.stringify({ company: "SmokeOrg" }),
+  });
+  ok("onboarding creates an org (201)", onboard.status === 201, `got ${onboard.status}`);
+  const me2 = await (await fetch(`${BASE}/v1/me`, { headers: sess })).json();
+  ok("/v1/me now shows onboarded + tenant", me2.onboarded === true && me2.tenant?.name === "SmokeOrg");
+
+  // The dashboard works via the SESSION COOKIE alone — no secret key.
+  const sessStats = await fetch(`${BASE}/v1/admin/stats`, { headers: sess });
+  const sessStatsBody = await sessStats.json();
+  ok("admin API works via session cookie (no key), isolated to the new org",
+    sessStats.status === 200 && sessStatsBody.total === 0);
+
+  // Logout invalidates the session.
+  ok("logout succeeds (200)", (await fetch(`${BASE}/auth/logout`, { method: "POST", headers: sess })).status === 200);
+  ok("/v1/me after logout → 401", (await fetch(`${BASE}/v1/me`, { headers: sess })).status === 401);
+
+  // Auth pages are served.
+  ok("simulated Google sign-in page served (200)", (await fetch(`${BASE}/auth/google`)).status === 200);
+  ok("onboarding page served (200)", (await fetch(`${BASE}/onboarding`)).status === 200);
+
   // --- signup page served ---
   const signupPage = await fetch(`${BASE}/signup`);
   ok("pricing / signup page served (200)", signupPage.status === 200);

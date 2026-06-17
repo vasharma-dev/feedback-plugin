@@ -587,6 +587,106 @@ export async function changePlan(
   return summary!;
 }
 
+// ====================================================================================
+// Users, accounts & sessions (simulated Google login)
+// ====================================================================================
+
+export interface AppUser {
+  id: string;
+  email: string;
+  name: string | null;
+  avatarUrl: string | null;
+  googleId: string | null;
+  tenantId: string | null;
+}
+
+const SESSION_TTL_DAYS = 30;
+
+/** Find a user by email, or create one. Keeps name/avatar fresh on each login. */
+export async function findOrCreateUser(profile: {
+  email: string;
+  name?: string | null;
+  avatarUrl?: string | null;
+  googleId?: string | null;
+}): Promise<AppUser> {
+  const email = profile.email.trim().toLowerCase();
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    const updated = await prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        name: profile.name ?? existing.name,
+        avatarUrl: profile.avatarUrl ?? existing.avatarUrl,
+        googleId: existing.googleId ?? profile.googleId ?? null,
+      },
+    });
+    return updated;
+  }
+  return prisma.user.create({
+    data: {
+      id: `usr_${nanoid(12)}`,
+      email,
+      name: profile.name ?? null,
+      avatarUrl: profile.avatarUrl ?? null,
+      googleId: profile.googleId ?? null,
+    },
+  });
+}
+
+/** Issue a new opaque session token for a user (stored server-side). */
+export async function createSession(userId: string): Promise<string> {
+  const token = `sess_${nanoid(32)}`;
+  await prisma.session.create({
+    data: { id: token, userId, expiresAt: addDays(new Date(), SESSION_TTL_DAYS) },
+  });
+  return token;
+}
+
+/** Resolve a session token to its user, or null if missing/expired. */
+export async function getSessionUser(token: string | undefined): Promise<AppUser | null> {
+  if (!token) return null;
+  const s = await prisma.session.findUnique({ where: { id: token }, include: { user: true } });
+  if (!s || s.expiresAt.getTime() <= Date.now()) return null;
+  return s.user;
+}
+
+export async function deleteSession(token: string | undefined): Promise<void> {
+  if (!token) return;
+  await prisma.session.deleteMany({ where: { id: token } });
+}
+
+/** The tenant's plaintext keys (prototype only) — used to show the embed snippet. */
+export async function getTenantKeys(
+  tenantId: string
+): Promise<{ publicKey: string | null; secretKey: string | null }> {
+  const keys = await prisma.apiKey.findMany({ where: { tenantId } });
+  return {
+    publicKey: keys.find((k) => k.kind === "public")?.key ?? null,
+    secretKey: keys.find((k) => k.kind === "secret")?.key ?? null,
+  };
+}
+
+/**
+ * Complete onboarding for a freshly-signed-in user: create their org (free plan, no card)
+ * and link the user to it. Idempotency: a user who already has a tenant is rejected.
+ */
+export async function onboardUser(
+  userId: string,
+  input: { company: string }
+): Promise<CreatedAccount> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new BillingError(404, "user_not_found");
+  if (user.tenantId) throw new BillingError(409, "already_onboarded", "This account already has an organization.");
+
+  const account = await createTenantAccount({
+    company: input.company,
+    billingEmail: user.email,
+    plan: "free",
+  });
+  await prisma.user.update({ where: { id: userId }, data: { tenantId: account.tenant.id } });
+  return account;
+}
+
 // ---- Idempotent seed (runs on boot; safe to call repeatedly) ----
 async function seedTenant(opts: {
   tenantId: string;

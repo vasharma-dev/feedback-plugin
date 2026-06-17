@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getBilling, getStats, listFeedback, patchStatus, type Filters } from "./api";
+import {
+  getBilling,
+  getMe,
+  getStats,
+  listFeedback,
+  logout,
+  patchStatus,
+  type Filters,
+  type Me,
+} from "./api";
 import Billing from "./components/Billing";
 import FeedbackCard from "./components/FeedbackCard";
 import FiltersBar from "./components/Filters";
@@ -40,11 +49,36 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [account, setAccount] = useState<{ name: string; plan: string } | null>(null);
+  const [session, setSession] = useState<Me | null>(null); // set when logged in via Google
+  const [authReady, setAuthReady] = useState(false);
 
   const keyRef = useRef(key);
   keyRef.current = key;
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
+
+  // Detect a logged-in session first. If onboarded → use cookie auth (empty key). If signed in
+  // but not onboarded → finish onboarding. Otherwise fall back to the legacy API-key flow.
+  useEffect(() => {
+    let alive = true;
+    getMe()
+      .then((me) => {
+        if (!alive) return;
+        if (me && me.onboarded && me.tenant) {
+          setSession(me);
+          setAccount({ name: me.tenant.name, plan: me.tenant.plan });
+          setKey(""); // empty key → api() uses the session cookie
+        } else if (me && !me.onboarded) {
+          window.location.href = "/onboarding";
+          return;
+        }
+        setAuthReady(true);
+      })
+      .catch(() => alive && setAuthReady(true));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -63,11 +97,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("jicama_key", key);
+    if (key) localStorage.setItem("jicama_key", key); // never persist the empty session key
   }, [key]);
 
-  // Resolve the org name + plan for the header whenever the key changes.
+  // Resolve the org name + plan for the header whenever the key changes (legacy/key mode).
   useEffect(() => {
+    if (!authReady || session) return; // session mode already has the account from /v1/me
     let alive = true;
     getBilling(key)
       .then((b) => alive && setAccount({ name: b.tenant.name, plan: b.plan.name }))
@@ -75,12 +110,13 @@ export default function App() {
     return () => {
       alive = false;
     };
-  }, [key]);
+  }, [key, authReady, session]);
 
   useEffect(() => {
+    if (!authReady) return;
     setLoading(true);
     refresh();
-  }, [refresh, filters, key]);
+  }, [refresh, filters, key, authReady]);
 
   // Poll so new submissions appear live (only while viewing the inbox).
   useEffect(() => {
@@ -97,6 +133,11 @@ export default function App() {
     } catch (e) {
       setError((e as Error).message);
     }
+  }
+
+  async function onLogout() {
+    await logout();
+    window.location.href = "/auth/google";
   }
 
   return (
@@ -121,30 +162,74 @@ export default function App() {
           </span>
 
           <div className="ml-auto relative">
-            <button
-              onClick={() => setSettingsOpen((v) => !v)}
-              className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 border border-slate-200 hover:border-slate-300 rounded-xl px-3 py-2 transition"
-            >
-              <SettingsIcon className="w-4 h-4" />
-              <span className="hidden sm:inline">API key</span>
-            </button>
-            {settingsOpen && (
+            {session ? (
               <>
-                <div className="fixed inset-0 z-10" onClick={() => setSettingsOpen(false)} />
-                <div className="absolute right-0 mt-2 w-80 z-20 bg-white rounded-2xl shadow-pop border border-slate-200 p-4 animate-fadeInUp">
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                    Secret API key
-                  </label>
-                  <input
-                    value={key}
-                    onChange={(e) => setKey(e.target.value)}
-                    spellCheck={false}
-                    className="mt-1.5 w-full font-mono text-sm px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-200 focus:border-brand-400 transition"
-                  />
-                  <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-                    Switch organizations by pasting another secret key. Stored locally in your browser only.
-                  </p>
-                </div>
+                <button
+                  onClick={() => setSettingsOpen((v) => !v)}
+                  className="inline-flex items-center gap-2 text-sm text-slate-700 hover:bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl pl-1.5 pr-3 py-1.5 transition"
+                >
+                  {session.user.avatarUrl ? (
+                    <img src={session.user.avatarUrl} alt="" className="w-7 h-7 rounded-full bg-slate-100" />
+                  ) : (
+                    <span className="w-7 h-7 rounded-full bg-brand-100 text-brand-700 grid place-items-center text-xs font-semibold">
+                      {(session.user.name || session.user.email)[0]?.toUpperCase()}
+                    </span>
+                  )}
+                  <span className="hidden sm:inline max-w-[140px] truncate">{session.user.email}</span>
+                </button>
+                {settingsOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setSettingsOpen(false)} />
+                    <div className="absolute right-0 mt-2 w-64 z-20 bg-white rounded-2xl shadow-pop border border-slate-200 p-2 animate-fadeInUp">
+                      <div className="px-3 py-2">
+                        <div className="text-sm font-medium text-slate-800 truncate">{session.user.name || "Signed in"}</div>
+                        <div className="text-xs text-slate-400 truncate">{session.user.email}</div>
+                      </div>
+                      <div className="border-t border-slate-100 my-1" />
+                      <button
+                        onClick={onLogout}
+                        className="w-full text-left text-sm text-slate-600 hover:bg-slate-50 rounded-lg px-3 py-2 transition"
+                      >
+                        Sign out
+                      </button>
+                    </div>
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setSettingsOpen((v) => !v)}
+                  className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 border border-slate-200 hover:border-slate-300 rounded-xl px-3 py-2 transition"
+                >
+                  <SettingsIcon className="w-4 h-4" />
+                  <span className="hidden sm:inline">API key</span>
+                </button>
+                {settingsOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setSettingsOpen(false)} />
+                    <div className="absolute right-0 mt-2 w-80 z-20 bg-white rounded-2xl shadow-pop border border-slate-200 p-4 animate-fadeInUp">
+                      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                        Secret API key
+                      </label>
+                      <input
+                        value={key}
+                        onChange={(e) => setKey(e.target.value)}
+                        spellCheck={false}
+                        className="mt-1.5 w-full font-mono text-sm px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-200 focus:border-brand-400 transition"
+                      />
+                      <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+                        Switch organizations by pasting another secret key. Stored locally in your browser only.
+                      </p>
+                      <a
+                        href="/auth/google"
+                        className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-brand-700 hover:text-brand-800"
+                      >
+                        Sign in with Google instead →
+                      </a>
+                    </div>
+                  </>
+                )}
               </>
             )}
           </div>
