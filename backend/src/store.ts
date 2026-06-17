@@ -40,6 +40,11 @@ type ProjectRow = {
   name: string;
   themeColor: string;
   themePosition: string;
+  launcherText: string;
+  launcherIcon: string;
+  headerTitle: string;
+  headerSubtitle: string;
+  hideBranding: boolean;
   allowedOrigins: string;
 };
 
@@ -49,7 +54,15 @@ function toProject(r: ProjectRow): Project {
     tenantId: r.tenantId,
     name: r.name,
     settings: {
-      theme: { color: r.themeColor, position: r.themePosition as Project["settings"]["theme"]["position"] },
+      theme: {
+        color: r.themeColor,
+        position: r.themePosition as Project["settings"]["theme"]["position"],
+        launcherText: r.launcherText,
+        launcherIcon: r.launcherIcon,
+        headerTitle: r.headerTitle,
+        headerSubtitle: r.headerSubtitle,
+        hideBranding: r.hideBranding,
+      },
       allowedOrigins: JSON.parse(r.allowedOrigins) as string[],
     },
   };
@@ -178,6 +191,17 @@ export async function listProjects(tenantId: string): Promise<Project[]> {
   return rows.map(toProject);
 }
 
+/** Projects plus their public key (pk_…) — used by the dashboard's widget/embed UI. */
+export async function listProjectsWithKeys(
+  tenantId: string
+): Promise<Array<Project & { publicKey: string | null }>> {
+  const rows = await prisma.project.findMany({ where: { tenantId }, include: { apiKeys: true } });
+  return rows.map((r) => ({
+    ...toProject(r),
+    publicKey: r.apiKeys.find((k) => k.kind === "public")?.key ?? null,
+  }));
+}
+
 /**
  * Replace a project's origin allow-list. Scoped by tenantId so one tenant can never edit
  * another's project — a mismatched tenant updates 0 rows and gets `undefined` (→ 404).
@@ -192,6 +216,38 @@ export async function updateProjectOrigins(
     where: { id: projectId, tenantId },
     data: { allowedOrigins: JSON.stringify(allowedOrigins) },
   });
+  if (res.count === 0) return undefined;
+  return getProject(projectId);
+}
+
+export interface ProjectThemeInput {
+  color?: string;
+  position?: "bottom-right" | "bottom-left";
+  launcherText?: string;
+  launcherIcon?: string;
+  headerTitle?: string;
+  headerSubtitle?: string;
+  hideBranding?: boolean;
+}
+
+/**
+ * Update a project's widget theme/branding. Tenant-scoped (a wrong tenant updates 0 rows → 404).
+ * Only the provided fields change; the rest keep their stored values.
+ */
+export async function updateProjectTheme(
+  tenantId: string,
+  projectId: string,
+  theme: ProjectThemeInput
+): Promise<Project | undefined> {
+  const data: Record<string, unknown> = {};
+  if (theme.color !== undefined) data.themeColor = theme.color;
+  if (theme.position !== undefined) data.themePosition = theme.position;
+  if (theme.launcherText !== undefined) data.launcherText = theme.launcherText;
+  if (theme.launcherIcon !== undefined) data.launcherIcon = theme.launcherIcon;
+  if (theme.headerTitle !== undefined) data.headerTitle = theme.headerTitle;
+  if (theme.headerSubtitle !== undefined) data.headerSubtitle = theme.headerSubtitle;
+  if (theme.hideBranding !== undefined) data.hideBranding = theme.hideBranding;
+  const res = await prisma.project.updateMany({ where: { id: projectId, tenantId }, data });
   if (res.count === 0) return undefined;
   return getProject(projectId);
 }

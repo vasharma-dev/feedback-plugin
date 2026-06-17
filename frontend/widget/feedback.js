@@ -87,12 +87,39 @@
         key: opts.key,
         api: (opts.api || location.origin).replace(/\/$/, ""),
         user: opts.user || null,
-        theme: Object.assign({ color: "#6C2BD9", position: "bottom-right" }, opts.theme || {}),
+        theme: Object.assign(
+          {
+            color: "#6C2BD9",
+            position: "bottom-right",
+            launcherText: "Feedback",
+            launcherIcon: "💬",
+            headerTitle: "Share your feedback",
+            headerSubtitle: "We read every message — thank you for helping us improve.",
+            hideBranding: false,
+          },
+          opts.theme || {}
+        ),
       };
       if (!this.cfg.key) return console.error("[jicama] missing data-key");
       injectStyles();
       this._mount();
+      this._loadConfig(); // pull the project's saved theme from the server, then re-render
       return this;
+    },
+
+    // The dashboard is the source of truth for branding: fetch the project's theme and
+    // apply it, so changing the look in the dashboard updates every embed — no code edits.
+    _loadConfig: function () {
+      var self = this;
+      if (!window.fetch) return;
+      fetch(this.cfg.api + "/v1/config", { headers: { Authorization: "Bearer " + this.cfg.key } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (cfg) {
+          if (!cfg || !cfg.theme) return;
+          Object.assign(self.cfg.theme, cfg.theme);
+          if (!self.state.open) self._mount(); // refresh the launcher (skip if modal is open)
+        })
+        .catch(function () {});
     },
 
     _mount: function () {
@@ -111,8 +138,8 @@
         }, pos),
         onclick: this.open.bind(this),
       }, [
-        el("span", { style: { fontSize: "16px", lineHeight: "1" } }, ["💬"]),
-        "Feedback",
+        el("span", { style: { fontSize: "16px", lineHeight: "1" } }, [this.cfg.theme.launcherIcon || "💬"]),
+        this.cfg.theme.launcherText || "Feedback",
       ]);
 
       this.root = el("div");
@@ -220,14 +247,14 @@
       }, [
         el("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" } }, [
           el("div", {}, [
-            el("div", { style: { fontSize: "17px", fontWeight: "700", letterSpacing: "-.01em" } }, ["Share your feedback"]),
-            el("div", { style: { margin: "3px 0 0", color: "#64748b", fontSize: "13px" } }, ["We read every message — thank you for helping us improve."]),
+            el("div", { style: { fontSize: "17px", fontWeight: "700", letterSpacing: "-.01em" } }, [this.cfg.theme.headerTitle || "Share your feedback"]),
+            el("div", { style: { margin: "3px 0 0", color: "#64748b", fontSize: "13px" } }, [this.cfg.theme.headerSubtitle || "We read every message — thank you for helping us improve."]),
           ]),
           el("button", { "class": "jcm-x", title: "Close", style: closeBtnStyle, onclick: this.close.bind(this) }, ["✕"]),
         ]),
         el("div", { style: { height: "14px" } }),
         body,
-        footer(),
+        this.cfg.theme.hideBranding ? null : footer(),
       ]);
       this._card = card;
 

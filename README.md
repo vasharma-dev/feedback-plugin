@@ -39,7 +39,7 @@ Then open:
 | http://localhost:4000/demo | A pretend tenant app with the widget embedded (try the 💬 button) |
 | http://localhost:4000/signup | **Pricing + self-serve signup** — pick a plan & pay (test mode), or **Continue with Google** for instant onboarding |
 | http://localhost:4000/auth/google | **Simulated "Sign in with Google"** → onboarding form → personalized dashboard |
-| http://localhost:4000/dashboard | The tenant admin console (React + Vite + Tailwind) — **Feedback inbox**, **Billing**, **Settings** tabs |
+| http://localhost:4000/dashboard | The tenant admin console (React + Vite + Tailwind) — **Feedback inbox**, **Widget** (theming), **Billing**, **Settings** tabs |
 | http://localhost:4000/health | Health check |
 
 > **Sign-in is a simulated Google login** (test mode) — no Google Cloud setup, works offline.
@@ -89,14 +89,15 @@ cd backend
 npm run smoke
 ```
 
-It runs 51 checks across the whole system — ingest, auth/trust separation, validation, spam
+It runs 56 checks across the whole system — ingest, auth/trust separation, validation, spam
 honeypot, admin stats/list/filter/patch, **plans/signup, billing + simulated payments (incl.
-declined cards), plan quotas, multi-tenant isolation, per-project origin lock-down, simulated
-Google login → onboarding → session-based dashboard**, and that the widget + signup + React
-dashboard are served — printing ✅/❌ per check and exiting non-zero on any failure. Expected:
+declined cards), plan quotas, multi-tenant isolation, per-project origin lock-down, widget
+theming/branding, simulated Google login → onboarding → session-based dashboard**, and that the
+widget + signup + React dashboard are served — printing ✅/❌ per check and exiting non-zero on
+any failure. Expected:
 
 ```
-✅ ALL PASS — 51 passed, 0 failed
+✅ ALL PASS — 56 passed, 0 failed
 ```
 
 ## The three integration surfaces (DESIGN.md §2)
@@ -108,6 +109,11 @@ dashboard are served — printing ✅/❌ per check and exiting non-zero on any 
         data-key="pk_demo_acme_123"
         data-color="#6C2BD9"></script>
 ```
+
+> The widget pulls its **theme/branding from the server** (`GET /v1/config`), so colors, button
+> text, modal copy and white-labeling are all controlled from the dashboard's **Widget** tab —
+> change them there and every embed updates, no code edit. `data-*` attributes act as the initial
+> look until the saved theme loads.
 
 **2. SDK** (`frontend/sdk`) — full control + user context:
 

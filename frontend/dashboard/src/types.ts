@@ -27,12 +27,23 @@ export interface Stats {
   avgRating: number | null;
 }
 
+export interface WidgetTheme {
+  color: string;
+  position: "bottom-right" | "bottom-left";
+  launcherText: string;
+  launcherIcon: string;
+  headerTitle: string;
+  headerSubtitle: string;
+  hideBranding: boolean;
+}
+
 export interface Project {
   id: string;
   tenantId: string;
   name: string;
+  publicKey?: string | null;
   settings: {
-    theme: { color: string; position: "bottom-right" | "bottom-left" };
+    theme: WidgetTheme;
     allowedOrigins: string[];
   };
 }

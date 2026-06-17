@@ -6,6 +6,11 @@ export interface FeedbackUser {
 export interface FeedbackTheme {
   color?: string;
   position?: "bottom-right" | "bottom-left";
+  launcherText?: string;
+  launcherIcon?: string;
+  headerTitle?: string;
+  headerSubtitle?: string;
+  hideBranding?: boolean;
 }
 
 export interface InitOptions {

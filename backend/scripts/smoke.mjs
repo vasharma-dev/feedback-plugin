@@ -268,6 +268,37 @@ async function main() {
   ok("admin can re-open the key to any origin (200)", reopen.status === 200, `got ${reopen.status}`);
 
   // ====================================================================================
+  // Widget theming / branding
+  // ====================================================================================
+
+  // Projects listing now includes the public key (for the embed snippet).
+  ok("admin projects include the public key", typeof freeProjects.projects?.[0]?.publicKey === "string");
+
+  // Update the theme via PATCH; the project echoes the new values back.
+  const themePatch = await fetch(`${BASE}/v1/admin/projects/${freeProjectId}`, {
+    method: "PATCH", headers: j(freeAcct.secretKey),
+    body: JSON.stringify({ theme: { color: "#ff0066", launcherText: "Tell us!", headerTitle: "Got feedback?", hideBranding: true } }),
+  });
+  const themed = await themePatch.json();
+  ok("admin updates widget theme (200)", themePatch.status === 200, `got ${themePatch.status}`);
+  ok("theme fields are persisted",
+    themed.settings?.theme?.color === "#ff0066" &&
+    themed.settings?.theme?.launcherText === "Tell us!" &&
+    themed.settings?.theme?.hideBranding === true);
+
+  // The widget pulls this via GET /v1/config — confirm it reflects the new theme.
+  const cfg2 = await (await fetch(`${BASE}/v1/config`, { headers: j(freeAcct.publicKey) })).json();
+  ok("widget /v1/config serves the saved theme",
+    cfg2.theme?.color === "#ff0066" && cfg2.theme?.launcherText === "Tell us!" && cfg2.theme?.hideBranding === true);
+
+  // Invalid theme values are rejected.
+  const badTheme = await fetch(`${BASE}/v1/admin/projects/${freeProjectId}`, {
+    method: "PATCH", headers: j(freeAcct.secretKey),
+    body: JSON.stringify({ theme: { color: "not-a-hex" } }),
+  });
+  ok("admin rejects an invalid theme color (422)", badTheme.status === 422, `got ${badTheme.status}`);
+
+  // ====================================================================================
   // Simulated Google login → onboarding → session-based dashboard
   // ====================================================================================
   const cookieFrom = (res) => (res.headers.get("set-cookie")?.match(/jicama_sess=[^;]+/) || [""])[0];

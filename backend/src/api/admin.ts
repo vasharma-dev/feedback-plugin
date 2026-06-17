@@ -5,11 +5,12 @@ import { Router } from "express";
 import { z } from "zod";
 import { resolveTenant } from "../middleware/auth.js";
 import {
-  listProjects,
+  listProjectsWithKeys,
   queryFeedback,
   statsFor,
   updateFeedbackStatus,
   updateProjectOrigins,
+  updateProjectTheme,
 } from "../store.js";
 
 export const adminRouter = Router();
@@ -19,7 +20,7 @@ adminRouter.use(resolveTenant);
 // GET /v1/admin/projects
 adminRouter.get("/projects", async (req, res, next) => {
   try {
-    res.json({ projects: await listProjects(req.tenantId!) });
+    res.json({ projects: await listProjectsWithKeys(req.tenantId!) });
   } catch (err) {
     next(err);
   }
@@ -40,38 +41,66 @@ function normalizeOrigin(raw: string): string | null {
   }
 }
 
-const originsSchema = z.object({
-  allowedOrigins: z.array(z.string().max(2000)).max(50),
+const themeSchema = z
+  .object({
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "color must be a #rrggbb hex").optional(),
+    position: z.enum(["bottom-right", "bottom-left"]).optional(),
+    launcherText: z.string().max(40).optional(),
+    launcherIcon: z.string().max(8).optional(),
+    headerTitle: z.string().max(80).optional(),
+    headerSubtitle: z.string().max(160).optional(),
+    hideBranding: z.boolean().optional(),
+  })
+  .optional();
+
+const projectPatchSchema = z.object({
+  allowedOrigins: z.array(z.string().max(2000)).max(50).optional(),
+  theme: themeSchema,
 });
 
-// PATCH /v1/admin/projects/:id  { allowedOrigins: string[] }
-// Lock a project's public key to specific origins (or ["*"] to allow any).
+// PATCH /v1/admin/projects/:id  { allowedOrigins?: string[], theme?: {...} }
+// Lock the public key to specific origins, and/or update the widget theme/branding.
 adminRouter.patch("/projects/:id", async (req, res, next) => {
   try {
-    const parsed = originsSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(422).json({ error: "validation_error" });
-
-    // Validate + canonicalize each entry; reject the whole request on any bad origin.
-    const seen = new Set<string>();
-    const cleaned: string[] = [];
-    for (const raw of parsed.data.allowedOrigins) {
-      const norm = normalizeOrigin(raw);
-      if (norm === null) {
-        return res.status(422).json({
-          error: "invalid_origin",
-          message: `"${raw}" is not a valid origin. Use "*" or a full origin like https://app.example.com.`,
-        });
-      }
-      if (!seen.has(norm)) {
-        seen.add(norm);
-        cleaned.push(norm);
-      }
+    const parsed = projectPatchSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(422).json({ error: "validation_error", details: parsed.error.flatten() });
     }
-    // A literal "*" anywhere means "allow any" — collapse to the canonical wildcard.
-    const origins = cleaned.includes("*") ? ["*"] : cleaned;
+    const { allowedOrigins, theme } = parsed.data;
+    if (!allowedOrigins && !theme) {
+      return res.status(422).json({ error: "nothing_to_update" });
+    }
 
-    const updated = await updateProjectOrigins(req.tenantId!, req.params.id, origins);
-    if (!updated) return res.status(404).json({ error: "not_found" });
+    let updated;
+
+    if (allowedOrigins) {
+      // Validate + canonicalize each entry; reject the whole request on any bad origin.
+      const seen = new Set<string>();
+      const cleaned: string[] = [];
+      for (const raw of allowedOrigins) {
+        const norm = normalizeOrigin(raw);
+        if (norm === null) {
+          return res.status(422).json({
+            error: "invalid_origin",
+            message: `"${raw}" is not a valid origin. Use "*" or a full origin like https://app.example.com.`,
+          });
+        }
+        if (!seen.has(norm)) {
+          seen.add(norm);
+          cleaned.push(norm);
+        }
+      }
+      // A literal "*" anywhere means "allow any" — collapse to the canonical wildcard.
+      const origins = cleaned.includes("*") ? ["*"] : cleaned;
+      updated = await updateProjectOrigins(req.tenantId!, req.params.id, origins);
+      if (!updated) return res.status(404).json({ error: "not_found" });
+    }
+
+    if (theme) {
+      updated = await updateProjectTheme(req.tenantId!, req.params.id, theme);
+      if (!updated) return res.status(404).json({ error: "not_found" });
+    }
+
     res.json(updated);
   } catch (err) {
     next(err);

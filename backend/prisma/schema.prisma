@@ -70,8 +70,14 @@ model Project {
   id             String     @id
   tenantId       String
   name           String
+  // ---- Widget theming / branding ----
   themeColor     String     @default("#6C2BD9")
   themePosition  String     @default("bottom-right")
+  launcherText   String     @default("Feedback") // text on the floating button
+  launcherIcon   String     @default("💬") // emoji on the button + modal
+  headerTitle    String     @default("Share your feedback")
+  headerSubtitle String     @default("We read every message — thank you for helping us improve.")
+  hideBranding   Boolean    @default(false) // white-label: drop "Powered by jicama"
   allowedOrigins String     @default("[\"*\"]") // JSON array of origins
   tenant         Tenant     @relation(fields: [tenantId], references: [id])
   apiKeys        ApiKey[]

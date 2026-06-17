@@ -1,6 +1,6 @@
 // Typed client for the Admin API. Calls are same-origin ("/v1/...") — when served by the
 // backend that hits it directly; under the Vite dev server the proxy forwards to :4000.
-import type { BillingResponse, CardInput, Feedback, FeedbackStatus, Invoice, Project, Stats } from "./types";
+import type { BillingResponse, CardInput, Feedback, FeedbackStatus, Invoice, Project, Stats, WidgetTheme } from "./types";
 
 export interface Filters {
   status?: string;
@@ -80,6 +80,18 @@ export function patchProjectOrigins(
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ allowedOrigins }),
+  }).then(json<Project>);
+}
+
+export function patchProjectTheme(
+  key: string,
+  id: string,
+  theme: Partial<WidgetTheme>
+): Promise<Project> {
+  return api(`/v1/admin/projects/${id}`, key, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ theme }),
   }).then(json<Project>);
 }
 
