@@ -113,3 +113,17 @@ export function checkout(key: string, plan: string, card?: CardInput): Promise<B
     body: JSON.stringify({ plan, card }),
   }).then(json<BillingResponse>);
 }
+
+export interface BuyTokensResult {
+  ok: boolean;
+  tokenBalance: number;
+  pack: { id: string; name: string; tokens: number; priceLabel?: string };
+}
+
+export function buyTokens(key: string, pack: string, card?: CardInput): Promise<BuyTokensResult> {
+  return api("/v1/admin/billing/buy-tokens", key, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pack, card }),
+  }).then(json<BuyTokensResult>);
+}

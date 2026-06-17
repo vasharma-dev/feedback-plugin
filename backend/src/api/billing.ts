@@ -14,14 +14,27 @@
 import { Router } from "express";
 import { z } from "zod";
 import { resolveTenant } from "../middleware/auth.js";
-import { formatPrice, getPlan, isPlanId, PLANS } from "../plans.js";
+import {
+  formatPackPrice,
+  formatPrice,
+  getPlan,
+  isPackId,
+  isPlanId,
+  PLANS,
+  TOKEN_PACKS,
+} from "../plans.js";
 import {
   BillingError,
+  buyTokens,
   changePlan,
   createTenantAccount,
   getBilling,
   listPayments,
 } from "../store.js";
+
+// Flat, display-friendly token packs for the dashboard's "buy tokens" UI.
+const packsView = () =>
+  Object.values(TOKEN_PACKS).map((p) => ({ ...p, priceLabel: formatPackPrice(p.priceCents) }));
 
 // ---- public: plan catalogue + signup ----
 export const publicBillingRouter = Router();
@@ -87,6 +100,8 @@ billingRouter.get("/", async (req, res, next) => {
     if (!summary) return res.status(404).json({ error: "tenant_not_found" });
     res.json({
       ...summary,
+      tokenBalance: summary.tenant.tokenBalance,
+      packs: packsView(),
       plan: getPlan(summary.tenant.plan),
       plans: Object.values(PLANS).map((p) => ({ ...p, priceLabel: formatPrice(p.priceCents) })),
     });
@@ -109,6 +124,33 @@ billingRouter.post("/checkout", async (req, res, next) => {
     const { plan, card } = parsed.data;
     const summary = await changePlan(req.tenantId!, isPlanId(plan) ? plan : "free", card);
     res.json({ ok: true, ...summary, plan: getPlan(summary.tenant.plan) });
+  } catch (err) {
+    if (err instanceof BillingError) {
+      return res.status(err.status).json({ error: err.code, message: err.message });
+    }
+    next(err);
+  }
+});
+
+const buyTokensSchema = z.object({
+  pack: z.string().refine(isPackId, "unknown token pack"),
+  card: cardSchema.optional(),
+});
+
+// POST /v1/admin/billing/buy-tokens  { pack, card? } — top up the token balance.
+billingRouter.post("/buy-tokens", async (req, res, next) => {
+  try {
+    const parsed = buyTokensSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(422).json({ error: "validation_error", details: parsed.error.flatten() });
+    }
+    const result = await buyTokens(req.tenantId!, parsed.data.pack, parsed.data.card);
+    res.json({
+      ok: true,
+      tokenBalance: result.tenant.tokenBalance,
+      pack: { ...result.pack, priceLabel: formatPackPrice(result.pack.priceCents) },
+      payment: result.payment,
+    });
   } catch (err) {
     if (err instanceof BillingError) {
       return res.status(err.status).json({ error: err.code, message: err.message });

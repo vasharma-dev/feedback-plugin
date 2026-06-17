@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { checkout, getBilling, getInvoices } from "../api";
+import { buyTokens, getBilling, getInvoices } from "../api";
 import { fullTime } from "../lib/format";
-import type { BillingResponse, Invoice, Plan } from "../types";
+import type { BillingResponse, Invoice, TokenPack } from "../types";
 import { CheckIcon } from "./icons";
 
 function money(cents: number) {
@@ -14,7 +14,8 @@ export default function Billing({ apiKey }: { apiKey: string }) {
   const [data, setData] = useState<BillingResponse | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [target, setTarget] = useState<Plan | null>(null); // plan being purchased (opens modal)
+  const [buying, setBuying] = useState<TokenPack | null>(null); // pack being purchased (opens modal)
+  const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -40,40 +41,54 @@ export default function Billing({ apiKey }: { apiKey: string }) {
   }
   if (!data) return <div className="text-slate-400 py-10 text-center">Loading billing…</div>;
 
-  const { tenant, usage, plan } = data;
-  const plans = data.plans ?? [];
-  const pct = usage.quota ? Math.min(100, Math.round((usage.used / usage.quota) * 100)) : 0;
-  const meterColor = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-brand-500";
+  const { tenant, plan } = data;
+  const packs = data.packs ?? [];
+  const balance = data.tokenBalance ?? tenant.tokenBalance ?? 0;
+  const low = balance < 50;
 
-  async function switchPlan(p: Plan) {
-    if (p.id === plan.id) return;
-    if (p.priceCents > 0 && !tenant.card) {
-      setTarget(p); // need a card → open modal
+  async function purchase(pack: TokenPack, card?: { number: string; expMonth: number; expYear: number; cvc: string }) {
+    // No card supplied and none on file → open the card modal first.
+    if (!card && !tenant.card) {
+      setBuying(pack);
       return;
     }
-    // Free downgrade, or paid with a card already on file → charge immediately.
     try {
-      setData(await checkout(apiKey, p.id));
+      const res = await buyTokens(apiKey, pack.id, card);
+      setBuying(null);
+      setToast(`Added ${pack.tokens.toLocaleString()} tokens — new balance ${res.tokenBalance.toLocaleString()}`);
+      setTimeout(() => setToast(null), 3500);
       await load();
     } catch (e) {
-      setError((e as Error).message);
+      if (!card) setError((e as Error).message);
+      else throw e; // surfaced inside the modal
     }
   }
 
   return (
     <div className="space-y-6">
-      {/* current subscription + usage */}
+      {toast && (
+        <div className="text-green-700 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm flex items-center gap-2">
+          <CheckIcon className="w-4 h-4" /> {toast}
+        </div>
+      )}
+
+      {/* balance + account */}
       <div className="grid md:grid-cols-2 gap-4">
-        <div className="bg-white rounded-2xl border border-slate-200/70 shadow-card p-5">
-          <div className="text-sm text-slate-500">Current plan</div>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-2xl font-bold text-slate-900">{plan.name}</span>
-            <span className="text-sm text-slate-500">{money(plan.priceCents)}{plan.priceCents ? " / mo" : ""}</span>
-            <span className="ml-auto text-xs font-medium px-2.5 py-1 rounded-full bg-green-50 text-green-700 ring-1 ring-inset ring-green-200 capitalize">
-              {tenant.subStatus}
-            </span>
+        <div className={`rounded-2xl border shadow-card p-5 ${low ? "bg-red-50 border-red-200" : "bg-white border-slate-200/70"}`}>
+          <div className="text-sm text-slate-500">Feedback tokens</div>
+          <div className="mt-1 flex items-end gap-2">
+            <span className="text-4xl font-bold text-slate-900 tabular-nums">{balance.toLocaleString()}</span>
+            <span className="text-sm text-slate-400 mb-1">tokens left</span>
           </div>
-          <div className="mt-4 text-sm text-slate-600 space-y-1">
+          <div className="mt-2 text-xs text-slate-500">
+            1 token = 1 accepted feedback.
+            {low && <span className="text-red-600 font-medium"> · running low — top up below.</span>}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200/70 shadow-card p-5">
+          <div className="text-sm text-slate-500">Account</div>
+          <div className="mt-2 text-sm text-slate-600 space-y-1">
             <div>Billing email: <span className="text-slate-800">{tenant.billingEmail || "—"}</span></div>
             <div>
               Card on file:{" "}
@@ -85,75 +100,46 @@ export default function Billing({ apiKey }: { apiKey: string }) {
                 <span className="text-slate-400">none</span>
               )}
             </div>
-            {tenant.currentPeriodEnd && (
-              <div>Renews: <span className="text-slate-800">{fullTime(tenant.currentPeriodEnd)}</span></div>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-slate-200/70 shadow-card p-5">
-          <div className="text-sm text-slate-500">Usage this period</div>
-          <div className="mt-1 text-2xl font-bold text-slate-900 tabular-nums">
-            {usage.used.toLocaleString()}{" "}
-            <span className="text-base font-medium text-slate-400">/ {usage.quota.toLocaleString()} feedback</span>
-          </div>
-          <div className="mt-3 h-2.5 rounded-full bg-slate-100 overflow-hidden">
-            <div className={`h-full rounded-full ${meterColor} transition-all`} style={{ width: `${pct}%` }} />
-          </div>
-          <div className="mt-2 text-xs text-slate-400">
-            {usage.remaining.toLocaleString()} remaining · {pct}% used
-            {pct >= 90 && <span className="text-red-600 font-medium"> · near limit, consider upgrading</span>}
+            <div>Status: <span className="text-slate-800 capitalize">{tenant.subStatus}</span> · {plan.name}</div>
           </div>
         </div>
       </div>
 
-      {/* plan picker */}
+      {/* buy tokens */}
       <div>
-        <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Plans</h2>
+        <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Buy tokens</h2>
         <div className="grid sm:grid-cols-3 gap-4">
-          {plans.map((p) => {
-            const current = p.id === plan.id;
-            return (
-              <div
-                key={p.id}
-                className={`relative bg-white rounded-2xl border p-5 flex flex-col ${
-                  current ? "border-brand-400 ring-2 ring-brand-100" : "border-slate-200/70"
-                }`}
-              >
-                {p.popular && !current && (
-                  <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-brand-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-full tracking-wide">
-                    POPULAR
-                  </span>
-                )}
-                <div className="font-semibold text-slate-900">{p.name}</div>
-                <div className="text-2xl font-bold mt-1">
-                  {money(p.priceCents)}
-                  <span className="text-sm font-medium text-slate-400">{p.priceCents ? " / mo" : ""}</span>
-                </div>
-                <p className="text-xs text-slate-500 mt-1 min-h-[32px]">{p.tagline}</p>
-                <ul className="mt-3 space-y-1.5 flex-1">
-                  {p.features.map((f) => (
-                    <li key={f} className="flex gap-2 text-xs text-slate-600">
-                      <CheckIcon className="w-3.5 h-3.5 text-green-600 shrink-0 mt-0.5" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  disabled={current}
-                  onClick={() => switchPlan(p)}
-                  className={`mt-4 w-full rounded-xl py-2.5 text-sm font-semibold transition ${
-                    current
-                      ? "bg-slate-100 text-slate-400 cursor-default"
-                      : "bg-brand-600 text-white hover:bg-brand-700"
-                  }`}
-                >
-                  {current ? "Current plan" : p.priceCents > (plan.priceCents ?? 0) ? "Upgrade" : "Switch"}
-                </button>
+          {packs.map((p) => (
+            <div
+              key={p.id}
+              className={`relative bg-white rounded-2xl border p-5 flex flex-col ${
+                p.popular ? "border-brand-400 ring-2 ring-brand-100" : "border-slate-200/70"
+              }`}
+            >
+              {p.popular && (
+                <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-brand-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-full tracking-wide">
+                  BEST VALUE
+                </span>
+              )}
+              <div className="font-semibold text-slate-900">{p.name}</div>
+              <div className="mt-1 text-3xl font-bold text-slate-900 tabular-nums">
+                {p.tokens.toLocaleString()}
+                <span className="text-sm font-medium text-slate-400"> tokens</span>
               </div>
-            );
-          })}
+              <p className="text-xs text-slate-500 mt-1 min-h-[32px]">{p.tagline}</p>
+              <div className="mt-2 text-lg font-bold text-slate-800">{p.priceLabel ?? money(p.priceCents)}</div>
+              <button
+                onClick={() => purchase(p)}
+                className="mt-4 w-full rounded-xl py-2.5 text-sm font-semibold transition bg-brand-600 text-white hover:bg-brand-700"
+              >
+                Buy {p.name}
+              </button>
+            </div>
+          ))}
         </div>
+        <p className="text-xs text-slate-400 mt-2">
+          One-off purchases (test mode) — tokens never expire. Use card <code className="bg-slate-100 px-1 rounded">4242 4242 4242 4242</code>.
+        </p>
       </div>
 
       {/* invoices */}
@@ -195,16 +181,11 @@ export default function Billing({ apiKey }: { apiKey: string }) {
         </div>
       </div>
 
-      {target && (
+      {buying && (
         <CardModal
-          plan={target}
-          onClose={() => setTarget(null)}
-          onPaid={async (card) => {
-            const res = await checkout(apiKey, target.id, card);
-            setTarget(null);
-            setData(res);
-            await load();
-          }}
+          pack={buying}
+          onClose={() => setBuying(null)}
+          onPaid={(card) => purchase(buying, card)}
         />
       )}
     </div>
@@ -212,11 +193,11 @@ export default function Billing({ apiKey }: { apiKey: string }) {
 }
 
 function CardModal({
-  plan,
+  pack,
   onClose,
   onPaid,
 }: {
-  plan: Plan;
+  pack: TokenPack;
   onClose: () => void;
   onPaid: (card: { number: string; expMonth: number; expYear: number; cvc: string }) => Promise<void>;
 }) {
@@ -248,11 +229,11 @@ function CardModal({
     <div className="fixed inset-0 z-30 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-pop w-[min(420px,94vw)] p-6 animate-fadeInUp" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-bold">Subscribe to {plan.name}</h3>
+          <h3 className="text-lg font-bold">Buy {pack.name}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700">✕</button>
         </div>
         <p className="text-sm text-slate-500 mt-1">
-          {money(plan.priceCents)} / month · billed to your card.
+          {pack.tokens.toLocaleString()} tokens · {pack.priceLabel ?? money(pack.priceCents)} one-off.
         </p>
         {err && <div className="mt-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">⚠ {err}</div>}
         <div className="mt-4 space-y-3">
@@ -270,7 +251,7 @@ function CardModal({
           onClick={pay}
           className="mt-4 w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white rounded-xl py-3 font-semibold transition"
         >
-          {busy ? "Processing…" : `Pay ${money(plan.priceCents)} & subscribe`}
+          {busy ? "Processing…" : `Pay ${pack.priceLabel ?? money(pack.priceCents)}`}
         </button>
       </div>
     </div>

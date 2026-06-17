@@ -72,6 +72,7 @@ export interface Tenant {
   id: string;
   name: string;
   plan: string;
+  tokenBalance: number;
   billingEmail: string | null;
   subStatus: string;
   currentPeriodStart: string;
@@ -79,9 +80,21 @@ export interface Tenant {
   card: CardOnFile | null;
 }
 
+export interface TokenPack {
+  id: string;
+  name: string;
+  tokens: number;
+  priceCents: number;
+  priceLabel?: string;
+  tagline: string;
+  popular?: boolean;
+}
+
 export interface BillingResponse {
   tenant: Tenant;
   usage: { used: number; quota: number; remaining: number };
+  tokenBalance: number;
+  packs: TokenPack[];
   plan: Plan;
   plans?: Plan[];
 }

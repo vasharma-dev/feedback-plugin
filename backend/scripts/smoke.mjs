@@ -299,6 +299,43 @@ async function main() {
   ok("admin rejects an invalid theme color (422)", badTheme.status === 422, `got ${badTheme.status}`);
 
   // ====================================================================================
+  // Tokens — the currency for accepting feedback (1 feedback = 1 token)
+  // ====================================================================================
+  const billingOf = async (sk) => (await fetch(`${BASE}/v1/admin/billing`, { headers: j(sk) })).json();
+
+  const bill0 = await billingOf(freeAcct.secretKey);
+  ok("billing reports a token balance", typeof bill0.tokenBalance === "number");
+  ok("billing lists token packs", Array.isArray(bill0.packs) && bill0.packs.length >= 3);
+  const before = bill0.tokenBalance;
+
+  // Accepting one feedback spends exactly one token.
+  await fetch(`${BASE}/v1/feedback`, {
+    method: "POST", headers: j(freeAcct.publicKey),
+    body: JSON.stringify({ type: "idea", message: "token-spend check" }),
+  });
+  const bill1 = await billingOf(freeAcct.secretKey);
+  ok("accepting feedback spends one token", bill1.tokenBalance === before - 1, `expected ${before - 1}, got ${bill1.tokenBalance}`);
+
+  // Buying a pack tops up the balance and records an invoice.
+  const buy = await fetch(`${BASE}/v1/admin/billing/buy-tokens`, {
+    method: "POST", headers: j(freeAcct.secretKey),
+    body: JSON.stringify({ pack: "starter", card: CARD_OK }),
+  });
+  const bought = await buy.json();
+  ok("buy starter pack succeeds (200)", buy.status === 200, `got ${buy.status}`);
+  ok("token balance increases by the pack size", bought.tokenBalance === before - 1 + 1000, `got ${bought.tokenBalance}`);
+  const inv = await (await fetch(`${BASE}/v1/admin/billing/invoices`, { headers: j(freeAcct.secretKey) })).json();
+  ok("token purchase recorded as a $9 invoice",
+    inv.invoices?.some((i) => /tokens/i.test(i.description) && i.amountCents === 900 && i.status === "paid"));
+
+  // Unknown pack rejected.
+  const badPack = await fetch(`${BASE}/v1/admin/billing/buy-tokens`, {
+    method: "POST", headers: j(freeAcct.secretKey),
+    body: JSON.stringify({ pack: "does_not_exist", card: CARD_OK }),
+  });
+  ok("unknown token pack rejected (422)", badPack.status === 422, `got ${badPack.status}`);
+
+  // ====================================================================================
   // Simulated Google login → onboarding → session-based dashboard
   // ====================================================================================
   const cookieFrom = (res) => (res.headers.get("set-cookie")?.match(/jicama_sess=[^;]+/) || [""])[0];

@@ -19,6 +19,7 @@ export interface Tenant {
   id: string;
   name: string;
   plan: Plan;
+  tokenBalance: number;
   createdAt: string;
   billingEmail: string | null;
   subStatus: SubStatus;

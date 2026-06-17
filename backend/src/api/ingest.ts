@@ -5,7 +5,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { requirePublicKey } from "../middleware/auth.js";
 import { rateLimit } from "../middleware/rateLimit.js";
-import { createFeedback, getBilling } from "../store.js";
+import { createFeedback, spendToken } from "../store.js";
 
 export const ingestRouter = Router();
 
@@ -43,13 +43,13 @@ ingestRouter.post("/feedback", requirePublicKey, rateLimit, async (req, res, nex
 
     const project = req.project!;
 
-    // Enforce the tenant's plan quota for the current billing period.
-    const billing = await getBilling(project.tenantId);
-    if (billing && billing.usage.remaining <= 0) {
+    // Tokens are the currency: spend one per accepted feedback. Atomic — returns false when
+    // the balance is 0, so we reject before writing anything.
+    const spent = await spendToken(project.tenantId);
+    if (!spent) {
       return res.status(402).json({
-        error: "quota_exceeded",
-        message: `Monthly feedback limit reached (${billing.usage.quota}). Upgrade your plan to accept more.`,
-        quota: billing.usage.quota,
+        error: "out_of_tokens",
+        message: "You're out of feedback tokens. Buy a token pack to accept more.",
       });
     }
 

@@ -49,10 +49,12 @@ Then open:
 > still works. Swapping in real Google OAuth is localized to `backend/src/auth/session.ts`
 > (`mockGoogleProfile`) + the `/auth/google/callback` route.
 
-> **Billing runs in simulated "test mode"** — no real charges. Use card `4242 4242 4242 4242`
-> (any future expiry + CVC) to succeed, or `4000 0000 0000 0002` to see a decline. The code is
-> structured so swapping in real Stripe is a localized change (see `backend/src/store.ts`
-> `chargeCard` + `backend/src/plans.ts`).
+> **Billing is token-based, in simulated "test mode"** — no real charges. Tokens are the
+> currency: every accepted feedback spends **1 token**, and orgs buy **token packs** (Starter
+> 1k/$9, Growth 10k/$79, Scale 100k/$599) from the dashboard's **Billing** tab to top up. New
+> orgs get a free starter grant. Use card `4242 4242 4242 4242` (any future expiry + CVC) to
+> succeed, or `4000 0000 0000 0002` to see a decline. Swapping in real Stripe is a localized
+> change (see `backend/src/store.ts` `chargeCard`/`buyTokens` + the packs in `backend/src/plans.ts`).
 
 > The dashboard at `/dashboard` is the **prebuilt** React app (`frontend/dashboard/dist`) and is
 > served by the backend, so the single `npm run dev` above is enough to use it. If `/dashboard`
@@ -89,15 +91,15 @@ cd backend
 npm run smoke
 ```
 
-It runs 56 checks across the whole system — ingest, auth/trust separation, validation, spam
-honeypot, admin stats/list/filter/patch, **plans/signup, billing + simulated payments (incl.
-declined cards), plan quotas, multi-tenant isolation, per-project origin lock-down, widget
-theming/branding, simulated Google login → onboarding → session-based dashboard**, and that the
-widget + signup + React dashboard are served — printing ✅/❌ per check and exiting non-zero on
-any failure. Expected:
+It runs 63 checks across the whole system — ingest, auth/trust separation, validation, spam
+honeypot, admin stats/list/filter/patch, **signup, simulated payments (incl. declined cards),
+token balance + spend-per-feedback + buying token packs, multi-tenant isolation, per-project
+origin lock-down, widget theming/branding, simulated Google login → onboarding → session-based
+dashboard**, and that the widget + signup + React dashboard are served — printing ✅/❌ per check
+and exiting non-zero on any failure. Expected:
 
 ```
-✅ ALL PASS — 56 passed, 0 failed
+✅ ALL PASS — 63 passed, 0 failed
 ```
 
 ## The three integration surfaces (DESIGN.md §2)
@@ -178,7 +180,7 @@ because the page and API share an origin — across projects you must set it.)
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
-| POST | `/v1/feedback` | public key | Submit feedback (ingest). Returns **402** when the plan's monthly quota is hit |
+| POST | `/v1/feedback` | public key | Submit feedback (ingest). Spends **1 token**; returns **402** when the org is out of tokens |
 | GET  | `/v1/config` | public key | Widget pulls project theme |
 | GET  | `/v1/plans` | — | Plan catalogue (free/pro/enterprise) for the pricing page |
 | POST | `/v1/signup` | — | Self-serve org signup → creates an isolated tenant + keys (charges card for paid plans) |
@@ -191,9 +193,10 @@ because the page and API share an origin — across projects you must set it.)
 | GET  | `/v1/admin/stats` | secret key | Counts + avg rating |
 | GET  | `/v1/admin/projects` | secret key | List projects |
 | PATCH| `/v1/admin/projects/:id` | secret key | Lock the public key to specific origins (or `["*"]` for any) |
-| GET  | `/v1/admin/billing` | secret key | Current plan, card on file, usage vs quota |
-| POST | `/v1/admin/billing/checkout` | secret key | Upgrade/downgrade plan (charges card) |
-| GET  | `/v1/admin/billing/invoices` | secret key | Payment history |
+| GET  | `/v1/admin/billing` | secret key / session | Token balance, packs, card on file, invoices |
+| POST | `/v1/admin/billing/buy-tokens` | secret key / session | Buy a token pack (charges card → tops up balance) |
+| POST | `/v1/admin/billing/checkout` | secret key / session | Change plan tier (legacy; charges card) |
+| GET  | `/v1/admin/billing/invoices` | secret key / session | Payment history |
 
 ## Layout
 

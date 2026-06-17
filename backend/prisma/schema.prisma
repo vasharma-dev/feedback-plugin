@@ -20,10 +20,12 @@ model Tenant {
   plan      String   @default("free") // free | pro | enterprise
   createdAt DateTime @default(now())
 
-  // ---- Billing / subscription (prototype: simulated "test mode", Stripe-ready) ----
+  // ---- Billing (prototype: simulated "test mode", Stripe-ready) ----
+  // Tokens are the currency: 1 accepted feedback = 1 token. Orgs buy packs to top up.
+  tokenBalance       Int       @default(100) // starter grant; topped up by buying packs
   billingEmail       String?
   subStatus          String    @default("active") // active | past_due | canceled | trialing
-  currentPeriodStart DateTime  @default(now()) // start of the usage/billing window
+  currentPeriodStart DateTime  @default(now()) // start of the usage window (for "used this period")
   currentPeriodEnd   DateTime? // informational; shown in the dashboard
   // Card "on file" — in real Stripe we'd only ever store these display-safe bits.
   cardBrand    String?

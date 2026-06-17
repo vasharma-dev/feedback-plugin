@@ -6,7 +6,7 @@
 
 import { nanoid } from "nanoid";
 import { prisma } from "./db.js";
-import { getPlan, type PlanId } from "./plans.js";
+import { getPack, getPlan, starterTokens, type PlanId, type TokenPack } from "./plans.js";
 import type {
   ApiKey,
   Attachment,
@@ -72,6 +72,7 @@ type TenantRow = {
   id: string;
   name: string;
   plan: string;
+  tokenBalance: number;
   createdAt: Date;
   billingEmail: string | null;
   subStatus: string;
@@ -88,6 +89,7 @@ function toTenant(r: TenantRow): Tenant {
     id: r.id,
     name: r.name,
     plan: r.plan as Plan,
+    tokenBalance: r.tokenBalance,
     createdAt: r.createdAt.toISOString(),
     billingEmail: r.billingEmail,
     subStatus: r.subStatus as Tenant["subStatus"],
@@ -460,6 +462,71 @@ export async function getBilling(tenantId: string): Promise<BillingSummary | und
   return { tenant, usage: { used, quota, remaining: Math.max(0, quota - used) } };
 }
 
+/**
+ * Spend one token for an accepted feedback. Atomic + race-safe: the conditional update only
+ * decrements when the balance is still > 0, so it can never go negative. Returns false when
+ * the tenant is out of tokens (the ingest API then responds 402).
+ */
+export async function spendToken(tenantId: string): Promise<boolean> {
+  const res = await prisma.tenant.updateMany({
+    where: { id: tenantId, tokenBalance: { gt: 0 } },
+    data: { tokenBalance: { decrement: 1 } },
+  });
+  return res.count > 0;
+}
+
+export interface BuyTokensResult {
+  tenant: Tenant;
+  pack: TokenPack;
+  payment: Payment;
+}
+
+/**
+ * Buy a token pack: charge a card (a fresh one, or the card on file), credit the tokens to the
+ * tenant's balance, and record the invoice. Simulated charge — see chargeCard.
+ */
+export async function buyTokens(
+  tenantId: string,
+  packId: string,
+  newCard?: CardInput
+): Promise<BuyTokensResult> {
+  const pack = getPack(packId);
+  if (!pack) throw new BillingError(404, "pack_not_found", "Unknown token pack.");
+  const existing = await prisma.tenant.findUnique({ where: { id: tenantId } });
+  if (!existing) throw new BillingError(404, "tenant_not_found");
+
+  let card: CardOnFile | null =
+    existing.cardBrand && existing.cardLast4 && existing.cardExpMonth && existing.cardExpYear
+      ? { brand: existing.cardBrand, last4: existing.cardLast4, expMonth: existing.cardExpMonth, expYear: existing.cardExpYear }
+      : null;
+  if (newCard) card = chargeCard(newCard, pack.priceCents);
+  else if (!card) throw new BillingError(402, "card_required", "Payment details are required to buy tokens.");
+
+  const now = new Date();
+  const updated = await prisma.tenant.update({
+    where: { id: tenantId },
+    data: {
+      tokenBalance: { increment: pack.tokens },
+      cardBrand: card?.brand ?? existing.cardBrand,
+      cardLast4: card?.last4 ?? existing.cardLast4,
+      cardExpMonth: card?.expMonth ?? existing.cardExpMonth,
+      cardExpYear: card?.expYear ?? existing.cardExpYear,
+    },
+  });
+
+  const payment = await recordPayment({
+    tenantId,
+    plan: existing.plan as PlanId,
+    amountCents: pack.priceCents,
+    card,
+    description: `${pack.tokens.toLocaleString()} tokens — ${pack.name} pack`,
+    periodStart: now,
+    periodEnd: now,
+  });
+
+  return { tenant: toTenant(updated), pack, payment };
+}
+
 export async function listPayments(tenantId: string): Promise<Payment[]> {
   const rows = await prisma.payment.findMany({
     where: { tenantId },
@@ -541,6 +608,7 @@ export async function createTenantAccount(input: CreateAccountInput): Promise<Cr
       id: tenantId,
       name: company,
       plan: plan.id,
+      tokenBalance: starterTokens(plan.id), // free starter grant (free=100, pro=5k, ent=100k)
       billingEmail: input.billingEmail.trim(),
       subStatus: "active",
       currentPeriodStart: now,
@@ -763,6 +831,7 @@ async function seedTenant(opts: {
       id: opts.tenantId,
       name: opts.name,
       plan: opts.plan,
+      tokenBalance: starterTokens(opts.plan),
       billingEmail: `billing@${opts.url.replace(/^https?:\/\//, "").split("/")[0]}`,
       subStatus: "active",
       currentPeriodStart: now,
@@ -849,5 +918,12 @@ export async function ensureSeed() {
       { type: "question", message: "How do I reset my API token?", rating: 4 },
       { type: "bug", message: "Invoices PDF is blank on Firefox.", rating: 1 },
     ],
+  });
+
+  // Keep the two demo orgs topped up so the live demo + smoke test never run out of tokens.
+  // (Real signups keep their actual balances — this only refills the seeded demo tenants.)
+  await prisma.tenant.updateMany({
+    where: { id: { in: ["ten_acme", "ten_globex"] }, tokenBalance: { lt: 500 } },
+    data: { tokenBalance: 100_000 },
   });
 }
