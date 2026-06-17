@@ -5,16 +5,23 @@
 //   /v1/me                 (GET)         — who am I? (drives the dashboard + onboarding)
 //   /v1/onboarding         (POST, JSON)  — create the org for a signed-in user
 //
-// Real OAuth later: replace mockGoogleProfile() with a Google code→token→profile exchange.
+// Real OAuth: when GOOGLE_CLIENT_ID/SECRET are set, /auth/google redirects to the real Google
+// consent screen and the GET callback exchanges the code; otherwise the mock page + POST is used.
 
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import type { Response } from "express";
 import { Router } from "express";
+import { nanoid } from "nanoid";
 import { z } from "zod";
+import { exchangeCodeForProfile, googleAuthUrl } from "../auth/google.js";
 import {
   clearSessionCookie,
   mockGoogleProfile,
   readSessionCookie,
   setSessionCookie,
 } from "../auth/session.js";
+import { isGoogleConfigured } from "../config.js";
 import {
   BillingError,
   createSession,
@@ -26,8 +33,50 @@ import {
   onboardUser,
 } from "../store.js";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const MOCK_SIGNIN_PAGE = path.resolve(__dirname, "../../../frontend/auth/google.html");
+const OAUTH_STATE_COOKIE = "g_oauth_state";
+
 // ---- /auth/* ----
 export const authRouter = Router();
+
+// Create the session for a resolved profile, returning where to send the browser next.
+async function startSession(
+  res: Response,
+  profile: { email: string; name?: string; avatarUrl?: string | null; googleId?: string | null }
+): Promise<string> {
+  const user = await findOrCreateUser(profile);
+  const token = await createSession(user.id);
+  setSessionCookie(res, token);
+  // New users finish onboarding; returning users go straight to their dashboard.
+  return user.tenantId ? "/dashboard" : "/onboarding";
+}
+
+// Start sign-in. Real Google OAuth when configured (redirect to consent), else the mock page.
+authRouter.get("/google", (req, res) => {
+  if (!isGoogleConfigured()) return res.sendFile(MOCK_SIGNIN_PAGE);
+  const state = nanoid(24);
+  res.cookie(OAUTH_STATE_COOKIE, state, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 600_000 });
+  res.redirect(googleAuthUrl(state));
+});
+
+// Real Google OAuth redirect target (?code=&state=) — only reached when configured.
+authRouter.get("/google/callback", async (req, res, next) => {
+  try {
+    if (!isGoogleConfigured()) return res.status(404).json({ error: "oauth_not_configured" });
+    const { code, state } = req.query as { code?: string; state?: string };
+    const expected = req.cookies?.[OAUTH_STATE_COOKIE];
+    res.clearCookie(OAUTH_STATE_COOKIE, { path: "/" });
+    if (!state || !expected || state !== expected) {
+      return res.status(403).type("text/plain").send("OAuth state mismatch — please sign in again.");
+    }
+    if (!code) return res.status(400).type("text/plain").send("Missing authorization code.");
+    const next = await startSession(res, await exchangeCodeForProfile(code));
+    res.redirect(next);
+  } catch (err) {
+    next(err);
+  }
+});
 
 // The mock Google page posts the chosen account here (application/x-www-form-urlencoded).
 authRouter.post("/google/callback", async (req, res, next) => {
@@ -36,12 +85,8 @@ authRouter.post("/google/callback", async (req, res, next) => {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
       return res.status(422).type("text/plain").send("A valid email is required.");
     }
-    const profile = mockGoogleProfile({ email, name: req.body?.name });
-    const user = await findOrCreateUser(profile);
-    const token = await createSession(user.id);
-    setSessionCookie(res, token);
-    // New users land on onboarding; returning users go straight to their dashboard.
-    res.redirect(user.tenantId ? "/dashboard" : "/onboarding");
+    const next = await startSession(res, mockGoogleProfile({ email, name: req.body?.name }));
+    res.redirect(next);
   } catch (err) {
     next(err);
   }

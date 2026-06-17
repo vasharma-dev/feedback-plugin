@@ -527,6 +527,51 @@ export async function buyTokens(
   return { tenant: toTenant(updated), pack, payment };
 }
 
+/**
+ * Credit tokens for a completed external (Stripe) purchase. Idempotent: the unique extId means
+ * a replayed return/webhook for the same Checkout session won't double-credit.
+ */
+export async function creditPurchasedTokens(opts: {
+  tenantId: string;
+  packId: string;
+  extId: string;
+  amountCents?: number;
+}): Promise<{ credited: boolean; tokenBalance: number }> {
+  const pack = getPack(opts.packId);
+  if (!pack) throw new BillingError(404, "pack_not_found");
+  const tenant = await prisma.tenant.findUnique({ where: { id: opts.tenantId } });
+  if (!tenant) throw new BillingError(404, "tenant_not_found");
+
+  const now = new Date();
+  try {
+    await prisma.payment.create({
+      data: {
+        id: `pay_${nanoid(12)}`,
+        tenantId: opts.tenantId,
+        extId: opts.extId, // unique → guards against double-credit
+        plan: tenant.plan,
+        amountCents: opts.amountCents ?? pack.priceCents,
+        currency: "usd",
+        status: "paid",
+        description: `${pack.tokens.toLocaleString()} tokens — ${pack.name} pack`,
+        periodStart: now,
+        periodEnd: now,
+      },
+    });
+  } catch (e) {
+    if ((e as { code?: string }).code === "P2002") {
+      return { credited: false, tokenBalance: tenant.tokenBalance }; // already processed
+    }
+    throw e;
+  }
+
+  const updated = await prisma.tenant.update({
+    where: { id: opts.tenantId },
+    data: { tokenBalance: { increment: pack.tokens } },
+  });
+  return { credited: true, tokenBalance: updated.tokenBalance };
+}
+
 export async function listPayments(tenantId: string): Promise<Payment[]> {
   const rows = await prisma.payment.findMany({
     where: { tenantId },

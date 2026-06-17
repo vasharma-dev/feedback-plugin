@@ -55,10 +55,8 @@ app.get("/demo", (_req, res) =>
 app.get("/signup", (_req, res) =>
   res.sendFile(path.join(frontendDir, "signup", "index.html"))
 );
-// Simulated "Sign in with Google" page + the post-login onboarding form.
-app.get("/auth/google", (_req, res) =>
-  res.sendFile(path.join(frontendDir, "auth", "google.html"))
-);
+// Post-login onboarding form. (The /auth/google entry point is handled by authRouter, which
+// redirects to real Google when configured or serves the mock sign-in page otherwise.)
 app.get("/onboarding", (_req, res) =>
   res.sendFile(path.join(frontendDir, "onboarding", "index.html"))
 );

@@ -46,15 +46,17 @@ Then open:
 > Clicking "Sign in with Google" creates a user + an httpOnly session cookie; first-timers complete
 > a short onboarding form that creates their org, then land on their own dashboard (no key-pasting).
 > The admin API accepts **either** that session **or** a secret key, so the legacy `?key=sk_…` flow
-> still works. Swapping in real Google OAuth is localized to `backend/src/auth/session.ts`
-> (`mockGoogleProfile`) + the `/auth/google/callback` route.
+> still works. **Real Google OAuth is built in** and switches on automatically when you set
+> `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` (see [Going live](#going-live-real-google-oauth--stripe-optional)) —
+> otherwise the simulated login is used.
 
 > **Billing is token-based, in simulated "test mode"** — no real charges. Tokens are the
 > currency: every accepted feedback spends **1 token**, and orgs buy **token packs** (Starter
 > 1k/$9, Growth 10k/$79, Scale 100k/$599) from the dashboard's **Billing** tab to top up. New
-> orgs get a free starter grant. Use card `4242 4242 4242 4242` (any future expiry + CVC) to
-> succeed, or `4000 0000 0000 0002` to see a decline. Swapping in real Stripe is a localized
-> change (see `backend/src/store.ts` `chargeCard`/`buyTokens` + the packs in `backend/src/plans.ts`).
+> orgs get a free starter grant. In the simulated fallback, use card `4242 4242 4242 4242` (any
+> future expiry + CVC) to succeed, or `4000 0000 0000 0002` to see a decline. **Real Stripe
+> Checkout is built in** and switches on when you set `STRIPE_SECRET_KEY` (see
+> [Going live](#going-live-real-google-oauth--stripe-optional)).
 
 > The dashboard at `/dashboard` is the **prebuilt** React app (`frontend/dashboard/dist`) and is
 > served by the backend, so the single `npm run dev` above is enough to use it. If `/dashboard`
@@ -91,7 +93,7 @@ cd backend
 npm run smoke
 ```
 
-It runs 63 checks across the whole system — ingest, auth/trust separation, validation, spam
+It runs 64 checks across the whole system (in the zero-setup fallback mode) — ingest, auth/trust separation, validation, spam
 honeypot, admin stats/list/filter/patch, **signup, simulated payments (incl. declined cards),
 token balance + spend-per-feedback + buying token packs, multi-tenant isolation, per-project
 origin lock-down, widget theming/branding, simulated Google login → onboarding → session-based
@@ -99,7 +101,7 @@ dashboard**, and that the widget + signup + React dashboard are served — print
 and exiting non-zero on any failure. Expected:
 
 ```
-✅ ALL PASS — 63 passed, 0 failed
+✅ ALL PASS — 64 passed, 0 failed
 ```
 
 ## The three integration surfaces (DESIGN.md §2)
@@ -169,12 +171,47 @@ because the page and API share an origin — across projects you must set it.)
 (or deep-link `…/dashboard/?key=sk_…`). You'll see **only** your org's submissions, live.
 
 > **Status: ready to test locally, not yet production-hardened.** The flow above is fully working.
-> Before going live you'd still want: hashed API keys (stored plaintext today), real Stripe
-> (charges are simulated), attachments on S3/R2 (inlined as data-URLs today), a Redis-backed rate
-> limiter (in-memory today), Postgres (flip the Prisma `provider`), and the backend deployed
-> behind HTTPS. (Per-project **origin allow-lists are built in** — new orgs default to `["*"]`;
-> lock the key to your domains from the dashboard's **Settings** tab.) See
+> Before going live you'd still want: hashed API keys (stored plaintext today), attachments on
+> S3/R2 (inlined as data-URLs today), a Redis-backed rate limiter (in-memory today), Postgres
+> (flip the Prisma `provider`), and the backend deployed behind HTTPS. (**Origin allow-lists**,
+> **real Google OAuth**, and **real Stripe Checkout** are all built in — see below.) See
 > [`DESIGN.md`](./DESIGN.md) §10.
+
+## Going live: real Google OAuth + Stripe (optional)
+
+Both production integrations are **opt-in via env vars** — set them and they switch on; leave
+them blank and the app uses the simulated login / simulated charge (zero setup). Both work with
+free **test-mode** credentials. Copy the keys into `backend/.env` (see `backend/.env.example`).
+
+**Real "Sign in with Google":**
+
+1. In [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services → Credentials**,
+   create an **OAuth client ID** of type **Web application**.
+2. Add an **Authorized redirect URI**: `http://localhost:4000/auth/google/callback`.
+3. Put the values in `backend/.env`:
+   ```bash
+   APP_URL="http://localhost:4000"
+   GOOGLE_CLIENT_ID="…apps.googleusercontent.com"
+   GOOGLE_CLIENT_SECRET="…"
+   ```
+   Restart the backend — `/auth/google` now redirects to the real Google consent screen, exchanges
+   the code, and creates the session. No code change. (Implementation: `backend/src/auth/google.ts`.)
+
+**Real Stripe Checkout** (for buying token packs):
+
+1. In the [Stripe Dashboard](https://dashboard.stripe.com/test/apikeys) (test mode), copy your
+   **Secret key** (`sk_test_…`).
+2. Put it in `backend/.env`:
+   ```bash
+   STRIPE_SECRET_KEY="sk_test_…"
+   ```
+   Restart the backend. Now **Buy** in the dashboard's Billing tab redirects to Stripe's hosted
+   checkout page; on success the backend verifies the session and credits the tokens (idempotently
+   via the Checkout session id). Pay with Stripe's test card `4242 4242 4242 4242`. (Implementation:
+   `backend/src/billing/stripe.ts` + the `/v1/billing/checkout/return` endpoint.)
+
+> The 64-check smoke test runs against the **fallback** (no keys) path, so it stays green with zero
+> setup; the real paths activate only when the env vars are present.
 
 ## API summary
 
@@ -184,7 +221,9 @@ because the page and API share an origin — across projects you must set it.)
 | GET  | `/v1/config` | public key | Widget pulls project theme |
 | GET  | `/v1/plans` | — | Plan catalogue (free/pro/enterprise) for the pricing page |
 | POST | `/v1/signup` | — | Self-serve org signup → creates an isolated tenant + keys (charges card for paid plans) |
-| POST | `/auth/google/callback` | — | Simulated "Sign in with Google" → creates/finds the user + a session cookie |
+| GET  | `/auth/google` | — | Start sign-in → redirects to real Google (if configured) or the mock page |
+| GET/POST | `/auth/google/callback` | — | OAuth code exchange (real) / mock form post → creates the user + session cookie |
+| GET  | `/v1/billing/checkout/return` | — | Stripe Checkout success return → verifies payment, credits tokens (idempotent) |
 | POST | `/auth/logout` | session | End the session |
 | GET  | `/v1/me` | session | Current user + org (drives the dashboard & onboarding) |
 | POST | `/v1/onboarding` | session | Create the org for a signed-in user (first-time setup) |

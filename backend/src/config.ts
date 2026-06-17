@@ -1,0 +1,26 @@
+// Runtime configuration for the optional production integrations.
+//
+// Both real Google OAuth and real Stripe are OPT-IN: set the env vars and they switch on;
+// leave them unset and the app falls back to the simulated mock login / simulated charge,
+// so the prototype still runs with zero setup.
+
+export const APP_URL = (process.env.APP_URL || "http://localhost:4000").replace(/\/$/, "");
+
+export const google = {
+  clientId: process.env.GOOGLE_CLIENT_ID || "",
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+  // Must exactly match an "Authorized redirect URI" in your Google Cloud OAuth client.
+  redirectUri: `${APP_URL}/auth/google/callback`,
+};
+
+export function isGoogleConfigured(): boolean {
+  return Boolean(google.clientId && google.clientSecret);
+}
+
+export const stripe = {
+  secretKey: process.env.STRIPE_SECRET_KEY || "",
+};
+
+export function isStripeConfigured(): boolean {
+  return Boolean(stripe.secretKey);
+}

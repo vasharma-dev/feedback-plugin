@@ -32,6 +32,20 @@ export default function Billing({ apiKey }: { apiKey: string }) {
     load();
   }, [load]);
 
+  // Handle the return from Stripe Checkout (?tokens=success|cancel|failed).
+  useEffect(() => {
+    const status = new URLSearchParams(window.location.search).get("tokens");
+    if (!status) return;
+    window.history.replaceState({}, "", window.location.pathname);
+    if (status === "success") {
+      setToast("Payment complete — tokens added to your balance.");
+      setTimeout(() => setToast(null), 4000);
+      load();
+    } else if (status === "failed") {
+      setError("Payment didn't complete. No tokens were added.");
+    }
+  }, [load]);
+
   if (error) {
     return (
       <div className="text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm">
@@ -45,9 +59,24 @@ export default function Billing({ apiKey }: { apiKey: string }) {
   const packs = data.packs ?? [];
   const balance = data.tokenBalance ?? tenant.tokenBalance ?? 0;
   const low = balance < 50;
+  const stripeEnabled = !!data.stripeEnabled;
 
   async function purchase(pack: TokenPack, card?: { number: string; expMonth: number; expYear: number; cvc: string }) {
-    // No card supplied and none on file → open the card modal first.
+    // Stripe mode: no card form — kick off a hosted Checkout Session and redirect to it.
+    if (stripeEnabled) {
+      try {
+        const res = await buyTokens(apiKey, pack.id);
+        if (res.mode === "redirect" && res.checkoutUrl) {
+          window.location.href = res.checkoutUrl;
+          return;
+        }
+      } catch (e) {
+        setError((e as Error).message);
+      }
+      return;
+    }
+
+    // Simulated mode: collect a card (modal) and charge immediately.
     if (!card && !tenant.card) {
       setBuying(pack);
       return;
@@ -55,8 +84,10 @@ export default function Billing({ apiKey }: { apiKey: string }) {
     try {
       const res = await buyTokens(apiKey, pack.id, card);
       setBuying(null);
-      setToast(`Added ${pack.tokens.toLocaleString()} tokens — new balance ${res.tokenBalance.toLocaleString()}`);
-      setTimeout(() => setToast(null), 3500);
+      if (res.mode === "charge") {
+        setToast(`Added ${pack.tokens.toLocaleString()} tokens — new balance ${res.tokenBalance.toLocaleString()}`);
+        setTimeout(() => setToast(null), 3500);
+      }
       await load();
     } catch (e) {
       if (!card) setError((e as Error).message);
@@ -138,7 +169,12 @@ export default function Billing({ apiKey }: { apiKey: string }) {
           ))}
         </div>
         <p className="text-xs text-slate-400 mt-2">
-          One-off purchases (test mode) — tokens never expire. Use card <code className="bg-slate-100 px-1 rounded">4242 4242 4242 4242</code>.
+          One-off purchases — tokens never expire.{" "}
+          {stripeEnabled ? (
+            <>You'll be redirected to <span className="font-medium text-slate-500">Stripe</span> to pay securely.</>
+          ) : (
+            <>Test mode — use card <code className="bg-slate-100 px-1 rounded">4242 4242 4242 4242</code>.</>
+          )}
         </p>
       </div>
 

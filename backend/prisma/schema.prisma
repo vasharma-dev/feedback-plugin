@@ -123,6 +123,7 @@ model Feedback {
 model Payment {
   id          String   @id
   tenantId    String
+  extId       String?  @unique // external payment id (Stripe Checkout session) — idempotency guard
   plan        String // plan purchased
   amountCents Int
   currency    String   @default("usd")

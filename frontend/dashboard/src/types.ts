@@ -95,6 +95,7 @@ export interface BillingResponse {
   usage: { used: number; quota: number; remaining: number };
   tokenBalance: number;
   packs: TokenPack[];
+  stripeEnabled?: boolean; // true → buying redirects to Stripe Checkout; false → simulated form
   plan: Plan;
   plans?: Plan[];
 }

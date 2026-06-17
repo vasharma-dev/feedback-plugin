@@ -306,6 +306,8 @@ async function main() {
   const bill0 = await billingOf(freeAcct.secretKey);
   ok("billing reports a token balance", typeof bill0.tokenBalance === "number");
   ok("billing lists token packs", Array.isArray(bill0.packs) && bill0.packs.length >= 3);
+  // With no STRIPE_SECRET_KEY set, the prototype uses the simulated charge fallback.
+  ok("billing reports stripeEnabled flag", bill0.stripeEnabled === false);
   const before = bill0.tokenBalance;
 
   // Accepting one feedback spends exactly one token.

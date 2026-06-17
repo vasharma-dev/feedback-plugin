@@ -114,11 +114,10 @@ export function checkout(key: string, plan: string, card?: CardInput): Promise<B
   }).then(json<BillingResponse>);
 }
 
-export interface BuyTokensResult {
-  ok: boolean;
-  tokenBalance: number;
-  pack: { id: string; name: string; tokens: number; priceLabel?: string };
-}
+// Either a simulated immediate charge (returns the new balance) or a Stripe redirect URL.
+export type BuyTokensResult =
+  | { mode: "charge"; ok: boolean; tokenBalance: number; pack: { id: string; name: string; tokens: number; priceLabel?: string } }
+  | { mode: "redirect"; checkoutUrl: string };
 
 export function buyTokens(key: string, pack: string, card?: CardInput): Promise<BuyTokensResult> {
   return api("/v1/admin/billing/buy-tokens", key, {

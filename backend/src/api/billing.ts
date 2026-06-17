@@ -13,10 +13,13 @@
 
 import { Router } from "express";
 import { z } from "zod";
+import { createCheckoutSession, retrieveCheckoutSession } from "../billing/stripe.js";
+import { APP_URL, isStripeConfigured } from "../config.js";
 import { resolveTenant } from "../middleware/auth.js";
 import {
   formatPackPrice,
   formatPrice,
+  getPack,
   getPlan,
   isPackId,
   isPlanId,
@@ -28,6 +31,7 @@ import {
   buyTokens,
   changePlan,
   createTenantAccount,
+  creditPurchasedTokens,
   getBilling,
   listPayments,
 } from "../store.js";
@@ -90,6 +94,30 @@ publicBillingRouter.post("/signup", async (req, res, next) => {
   }
 });
 
+// Stripe Checkout success redirect lands here (public — verified via the Stripe session itself,
+// not a cookie). Confirms payment, credits tokens idempotently, then bounces to the dashboard.
+publicBillingRouter.get("/billing/checkout/return", async (req, res, next) => {
+  try {
+    const sessionId = String(req.query.session_id || "");
+    if (!isStripeConfigured() || !sessionId) return res.redirect(`${APP_URL}/dashboard`);
+    const session = await retrieveCheckoutSession(sessionId);
+    const tenantId = session.metadata.tenantId;
+    const packId = session.metadata.packId;
+    if (session.paymentStatus === "paid" && tenantId && packId) {
+      await creditPurchasedTokens({
+        tenantId,
+        packId,
+        extId: session.id,
+        amountCents: session.amountTotal ?? undefined,
+      });
+      return res.redirect(`${APP_URL}/dashboard?tokens=success`);
+    }
+    res.redirect(`${APP_URL}/dashboard?tokens=failed`);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ---- secret-key: the tenant's own billing console ----
 export const billingRouter = Router();
 billingRouter.use(resolveTenant);
@@ -102,6 +130,7 @@ billingRouter.get("/", async (req, res, next) => {
       ...summary,
       tokenBalance: summary.tenant.tokenBalance,
       packs: packsView(),
+      stripeEnabled: isStripeConfigured(), // dashboard picks redirect vs simulated card form
       plan: getPlan(summary.tenant.plan),
       plans: Object.values(PLANS).map((p) => ({ ...p, priceLabel: formatPrice(p.priceCents) })),
     });
@@ -137,15 +166,30 @@ const buyTokensSchema = z.object({
   card: cardSchema.optional(),
 });
 
-// POST /v1/admin/billing/buy-tokens  { pack, card? } — top up the token balance.
+// POST /v1/admin/billing/buy-tokens  { pack, card? }
+//  - Stripe configured → create a hosted Checkout Session, return its URL to redirect to.
+//  - otherwise         → simulated charge that credits tokens immediately.
 billingRouter.post("/buy-tokens", async (req, res, next) => {
   try {
     const parsed = buyTokensSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(422).json({ error: "validation_error", details: parsed.error.flatten() });
     }
+
+    if (isStripeConfigured()) {
+      const pack = getPack(parsed.data.pack)!; // schema guarantees a valid pack id
+      const session = await createCheckoutSession({
+        pack,
+        tenantId: req.tenantId!,
+        successUrl: `${APP_URL}/v1/billing/checkout/return?session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${APP_URL}/dashboard?tokens=cancel`,
+      });
+      return res.json({ mode: "redirect", checkoutUrl: session.url });
+    }
+
     const result = await buyTokens(req.tenantId!, parsed.data.pack, parsed.data.card);
     res.json({
+      mode: "charge",
       ok: true,
       tokenBalance: result.tenant.tokenBalance,
       pack: { ...result.pack, priceLabel: formatPackPrice(result.pack.priceCents) },
