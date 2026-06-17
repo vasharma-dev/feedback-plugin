@@ -81,13 +81,14 @@ cd backend
 npm run smoke
 ```
 
-It runs 31 checks across the whole system — ingest, auth/trust separation, validation, spam
+It runs 40 checks across the whole system — ingest, auth/trust separation, validation, spam
 honeypot, admin stats/list/filter/patch, **plans/signup, billing + simulated payments (incl.
-declined cards), plan quotas, multi-tenant isolation**, and that the widget + signup + React
-dashboard are served — printing ✅/❌ per check and exiting non-zero on any failure. Expected:
+declined cards), plan quotas, multi-tenant isolation, per-project origin lock-down**, and that
+the widget + signup + React dashboard are served — printing ✅/❌ per check and exiting non-zero
+on any failure. Expected:
 
 ```
-✅ ALL PASS — 31 passed, 0 failed
+✅ ALL PASS — 40 passed, 0 failed
 ```
 
 ## The three integration surfaces (DESIGN.md §2)
@@ -154,8 +155,9 @@ because the page and API share an origin — across projects you must set it.)
 > **Status: ready to test locally, not yet production-hardened.** The flow above is fully working.
 > Before going live you'd still want: hashed API keys (stored plaintext today), real Stripe
 > (charges are simulated), attachments on S3/R2 (inlined as data-URLs today), a Redis-backed rate
-> limiter (in-memory today), Postgres (flip the Prisma `provider`), the backend deployed behind
-> HTTPS, and per-project origin allow-lists (new orgs default to `["*"]`). See
+> limiter (in-memory today), Postgres (flip the Prisma `provider`), and the backend deployed
+> behind HTTPS. (Per-project **origin allow-lists are built in** — new orgs default to `["*"]`;
+> lock the key to your domains from the dashboard's **Settings** tab.) See
 > [`DESIGN.md`](./DESIGN.md) §10.
 
 ## API summary
@@ -170,6 +172,7 @@ because the page and API share an origin — across projects you must set it.)
 | PATCH| `/v1/admin/feedback/:id` | secret key | Change status |
 | GET  | `/v1/admin/stats` | secret key | Counts + avg rating |
 | GET  | `/v1/admin/projects` | secret key | List projects |
+| PATCH| `/v1/admin/projects/:id` | secret key | Lock the public key to specific origins (or `["*"]` for any) |
 | GET  | `/v1/admin/billing` | secret key | Current plan, card on file, usage vs quota |
 | POST | `/v1/admin/billing/checkout` | secret key | Upgrade/downgrade plan (charges card) |
 | GET  | `/v1/admin/billing/invoices` | secret key | Payment history |

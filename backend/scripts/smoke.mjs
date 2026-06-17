@@ -210,6 +210,63 @@ async function main() {
   ok("Acme feedback never leaks Globex rows",
     acmeList.items.every((i) => i.tenantId === "ten_acme"));
 
+  // ====================================================================================
+  // Project settings — allowed-origins lock-down
+  // ====================================================================================
+
+  // Find the new free org's project id.
+  const freeProjects = await (await fetch(`${BASE}/v1/admin/projects`, { headers: j(freeAcct.secretKey) })).json();
+  const freeProjectId = freeProjects.projects?.[0]?.id;
+  ok("admin lists the org's project", typeof freeProjectId === "string");
+
+  // Lock the public key to a specific origin (canonicalized, deduped).
+  const lock = await fetch(`${BASE}/v1/admin/projects/${freeProjectId}`, {
+    method: "PATCH", headers: j(freeAcct.secretKey),
+    body: JSON.stringify({ allowedOrigins: ["https://app.example.com", "https://app.example.com/"] }),
+  });
+  const locked = await lock.json();
+  ok("admin locks project to an origin (200)", lock.status === 200, `got ${lock.status}`);
+  ok("origins are canonicalized + deduped",
+    JSON.stringify(locked.settings?.allowedOrigins) === JSON.stringify(["https://app.example.com"]));
+
+  // Ingest from a now-disallowed origin is rejected; the allowed origin still works.
+  const wrongOrigin = await fetch(`${BASE}/v1/feedback`, {
+    method: "POST", headers: { ...j(freeAcct.publicKey), Origin: "https://evil.example.com" },
+    body: JSON.stringify({ type: "bug", message: "from a blocked site" }),
+  });
+  ok("ingest REJECTS a disallowed origin (403)", wrongOrigin.status === 403, `got ${wrongOrigin.status}`);
+  const rightOrigin = await fetch(`${BASE}/v1/feedback`, {
+    method: "POST", headers: { ...j(freeAcct.publicKey), Origin: "https://app.example.com" },
+    body: JSON.stringify({ type: "bug", message: "from the allowed site" }),
+  });
+  ok("ingest ACCEPTS an allowed origin (201)", rightOrigin.status === 201, `got ${rightOrigin.status}`);
+
+  // Bad origins are validated.
+  const badOrigin = await fetch(`${BASE}/v1/feedback`, {
+    method: "POST", headers: { ...j(freeAcct.publicKey), Origin: "not-a-url" },
+    body: JSON.stringify({ type: "bug", message: "x" }),
+  });
+  ok("ingest REJECTS an unlisted/garbage origin (403)", badOrigin.status === 403, `got ${badOrigin.status}`);
+  const invalidPatch = await fetch(`${BASE}/v1/admin/projects/${freeProjectId}`, {
+    method: "PATCH", headers: j(freeAcct.secretKey),
+    body: JSON.stringify({ allowedOrigins: ["not-a-valid-origin"] }),
+  });
+  ok("admin rejects an invalid origin (422)", invalidPatch.status === 422, `got ${invalidPatch.status}`);
+
+  // A tenant can't edit another tenant's project (isolation).
+  const crossLock = await fetch(`${BASE}/v1/admin/projects/${freeProjectId}`, {
+    method: "PATCH", headers: j(GLOBEX_SECRET),
+    body: JSON.stringify({ allowedOrigins: ["*"] }),
+  });
+  ok("admin can't edit another tenant's project (404)", crossLock.status === 404, `got ${crossLock.status}`);
+
+  // Re-open the key so this org is left in a clean ["*"] state.
+  const reopen = await fetch(`${BASE}/v1/admin/projects/${freeProjectId}`, {
+    method: "PATCH", headers: j(freeAcct.secretKey),
+    body: JSON.stringify({ allowedOrigins: ["*"] }),
+  });
+  ok("admin can re-open the key to any origin (200)", reopen.status === 200, `got ${reopen.status}`);
+
   // --- signup page served ---
   const signupPage = await fetch(`${BASE}/signup`);
   ok("pricing / signup page served (200)", signupPage.status === 200);

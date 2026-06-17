@@ -9,6 +9,7 @@ import {
   queryFeedback,
   statsFor,
   updateFeedbackStatus,
+  updateProjectOrigins,
 } from "../store.js";
 
 export const adminRouter = Router();
@@ -19,6 +20,59 @@ adminRouter.use(requireSecretKey);
 adminRouter.get("/projects", async (req, res, next) => {
   try {
     res.json({ projects: await listProjects(req.apiKey!.tenantId) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// An origin is "*" (allow any) or a bare scheme://host[:port] with no path/query/hash —
+// exactly what a browser sends in the Origin header and what auth.ts compares against.
+function normalizeOrigin(raw: string): string | null {
+  const o = raw.trim();
+  if (o === "*") return "*";
+  try {
+    const u = new URL(o);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    // u.origin drops any trailing slash/path; require the input to already be canonical.
+    return u.origin === o.replace(/\/$/, "") ? u.origin : null;
+  } catch {
+    return null;
+  }
+}
+
+const originsSchema = z.object({
+  allowedOrigins: z.array(z.string().max(2000)).max(50),
+});
+
+// PATCH /v1/admin/projects/:id  { allowedOrigins: string[] }
+// Lock a project's public key to specific origins (or ["*"] to allow any).
+adminRouter.patch("/projects/:id", async (req, res, next) => {
+  try {
+    const parsed = originsSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(422).json({ error: "validation_error" });
+
+    // Validate + canonicalize each entry; reject the whole request on any bad origin.
+    const seen = new Set<string>();
+    const cleaned: string[] = [];
+    for (const raw of parsed.data.allowedOrigins) {
+      const norm = normalizeOrigin(raw);
+      if (norm === null) {
+        return res.status(422).json({
+          error: "invalid_origin",
+          message: `"${raw}" is not a valid origin. Use "*" or a full origin like https://app.example.com.`,
+        });
+      }
+      if (!seen.has(norm)) {
+        seen.add(norm);
+        cleaned.push(norm);
+      }
+    }
+    // A literal "*" anywhere means "allow any" — collapse to the canonical wildcard.
+    const origins = cleaned.includes("*") ? ["*"] : cleaned;
+
+    const updated = await updateProjectOrigins(req.apiKey!.tenantId, req.params.id, origins);
+    if (!updated) return res.status(404).json({ error: "not_found" });
+    res.json(updated);
   } catch (err) {
     next(err);
   }

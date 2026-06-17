@@ -178,6 +178,24 @@ export async function listProjects(tenantId: string): Promise<Project[]> {
   return rows.map(toProject);
 }
 
+/**
+ * Replace a project's origin allow-list. Scoped by tenantId so one tenant can never edit
+ * another's project — a mismatched tenant updates 0 rows and gets `undefined` (→ 404).
+ * The widget's public key is only accepted from these origins (or any, when ["*"]).
+ */
+export async function updateProjectOrigins(
+  tenantId: string,
+  projectId: string,
+  allowedOrigins: string[]
+): Promise<Project | undefined> {
+  const res = await prisma.project.updateMany({
+    where: { id: projectId, tenantId },
+    data: { allowedOrigins: JSON.stringify(allowedOrigins) },
+  });
+  if (res.count === 0) return undefined;
+  return getProject(projectId);
+}
+
 // ---- Feedback ----
 export interface CreateFeedbackInput {
   projectId: string;

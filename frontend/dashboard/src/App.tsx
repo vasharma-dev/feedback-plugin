@@ -3,6 +3,7 @@ import { getBilling, getStats, listFeedback, patchStatus, type Filters } from ".
 import Billing from "./components/Billing";
 import FeedbackCard from "./components/FeedbackCard";
 import FiltersBar from "./components/Filters";
+import Settings from "./components/Settings";
 import StatsBar from "./components/StatsBar";
 import { InboxIcon, SettingsIcon } from "./components/icons";
 import type { Feedback, FeedbackStatus, Stats } from "./types";
@@ -21,7 +22,13 @@ function initialKey(): string {
   return localStorage.getItem("jicama_key") || DEFAULT_KEY;
 }
 
-type Tab = "inbox" | "billing";
+type Tab = "inbox" | "billing" | "settings";
+
+const TAB_LABELS: Record<Tab, string> = {
+  inbox: "Feedback inbox",
+  billing: "Billing & plan",
+  settings: "Settings",
+};
 
 export default function App() {
   const [key, setKey] = useState(initialKey);
@@ -145,17 +152,17 @@ export default function App() {
 
         {/* tabs */}
         <div className="max-w-5xl mx-auto px-5 flex gap-1 -mb-px">
-          {(["inbox", "billing"] as Tab[]).map((t) => (
+          {(["inbox", "billing", "settings"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition capitalize ${
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition ${
                 tab === t
                   ? "border-brand-600 text-brand-700"
                   : "border-transparent text-slate-500 hover:text-slate-800"
               }`}
             >
-              {t === "inbox" ? "Feedback inbox" : "Billing & plan"}
+              {TAB_LABELS[t]}
             </button>
           ))}
         </div>
@@ -176,6 +183,16 @@ export default function App() {
               <p className="text-sm text-slate-500 mt-0.5">Manage your subscription, payment method and usage.</p>
             </div>
             <Billing apiKey={key} />
+          </>
+        ) : tab === "settings" ? (
+          <>
+            <div className="mb-5">
+              <h1 className="text-xl font-bold text-slate-900 tracking-tight">Settings</h1>
+              <p className="text-sm text-slate-500 mt-0.5">
+                Lock your widget's public key to the sites that are allowed to use it.
+              </p>
+            </div>
+            <Settings apiKey={key} />
           </>
         ) : (
           <>

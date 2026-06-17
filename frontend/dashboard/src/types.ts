@@ -27,6 +27,16 @@ export interface Stats {
   avgRating: number | null;
 }
 
+export interface Project {
+  id: string;
+  tenantId: string;
+  name: string;
+  settings: {
+    theme: { color: string; position: "bottom-right" | "bottom-left" };
+    allowedOrigins: string[];
+  };
+}
+
 // ---- Billing ----
 export interface Plan {
   id: string;
