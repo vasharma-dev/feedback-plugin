@@ -69,7 +69,7 @@ export interface ApiKey {
   id: string;
   tenantId: string;
   projectId: string | null; // public keys belong to a project; secret keys are tenant-wide
-  key: string; // prototype stores plaintext; production stores key_hash only
+  key: string | null; // plaintext for PUBLIC keys only (embedded in HTML); null for secrets (hash-only)
   kind: "public" | "secret";
   active: boolean;
 }

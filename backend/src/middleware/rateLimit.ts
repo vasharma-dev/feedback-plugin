@@ -1,35 +1,56 @@
-// Minimal fixed-window rate limiter (DESIGN.md §8 — spam/bot protection).
-// Keyed per API key + client IP. In-memory; production would use Redis.
+// Fixed-window rate limiter (DESIGN.md §8 — spam/bot protection).
+// Keyed per API key id + client IP.
+//
+// The counter lives behind a small RateLimitStore interface so the in-memory store (fine for a
+// single instance) can be swapped for Redis in a multi-instance deployment without touching the
+// middleware. To go to Redis: implement `hit()` with INCR + PEXPIRE and set REDIS_URL.
 
 import type { NextFunction, Request, Response } from "express";
 
 const WINDOW_MS = 60_000;
 const MAX_PER_WINDOW = 30;
 
-const hits = new Map<string, { count: number; resetAt: number }>();
+export interface RateLimitStore {
+  /** Record a hit for `key` in the current window; return the running count + when it resets. */
+  hit(key: string, windowMs: number): Promise<{ count: number; resetAt: number }>;
+}
 
-// Drop expired windows so the map can't grow unbounded under key/IP churn.
-function sweep(now: number) {
-  for (const [k, v] of hits) {
-    if (now > v.resetAt) hits.delete(k);
+// ---- Default: in-memory store (per-process). ----
+class MemoryStore implements RateLimitStore {
+  private hits = new Map<string, { count: number; resetAt: number }>();
+
+  async hit(key: string, windowMs: number) {
+    const now = Date.now();
+    if (this.hits.size > 5000) this.sweep(now); // opportunistic cleanup under churn
+    const entry = this.hits.get(key);
+    if (!entry || now > entry.resetAt) {
+      const fresh = { count: 1, resetAt: now + windowMs };
+      this.hits.set(key, fresh);
+      return fresh;
+    }
+    entry.count += 1;
+    return entry;
+  }
+
+  private sweep(now: number) {
+    for (const [k, v] of this.hits) if (now > v.resetAt) this.hits.delete(k);
   }
 }
 
-export function rateLimit(req: Request, res: Response, next: NextFunction) {
-  const id = `${req.apiKey?.key ?? "anon"}:${req.ip}`;
-  const now = Date.now();
-  // Opportunistic cleanup: cheap, and only when the map is large enough to matter.
-  if (hits.size > 5000) sweep(now);
-  const entry = hits.get(id);
+// Swap this for a RedisStore when REDIS_URL is configured (see note above).
+const store: RateLimitStore = new MemoryStore();
 
-  if (!entry || now > entry.resetAt) {
-    hits.set(id, { count: 1, resetAt: now + WINDOW_MS });
-    return next();
+export async function rateLimit(req: Request, res: Response, next: NextFunction) {
+  try {
+    // Key on the API key's id (never the secret) + IP.
+    const id = `${req.apiKey?.id ?? "anon"}:${req.ip}`;
+    const { count, resetAt } = await store.hit(id, WINDOW_MS);
+    if (count > MAX_PER_WINDOW) {
+      res.setHeader("Retry-After", Math.ceil((resetAt - Date.now()) / 1000));
+      return res.status(429).json({ error: "rate_limited" });
+    }
+    next();
+  } catch (err) {
+    next(err);
   }
-  if (entry.count >= MAX_PER_WINDOW) {
-    res.setHeader("Retry-After", Math.ceil((entry.resetAt - now) / 1000));
-    return res.status(429).json({ error: "rate_limited" });
-  }
-  entry.count += 1;
-  next();
 }

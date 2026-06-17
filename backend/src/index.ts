@@ -7,6 +7,7 @@ import { adminRouter } from "./api/admin.js";
 import { accountRouter, authRouter } from "./api/auth.js";
 import { billingRouter, publicBillingRouter } from "./api/billing.js";
 import { ingestRouter } from "./api/ingest.js";
+import { UPLOADS_DIR } from "./storage.js";
 import { DEMO, DEMO2, ensureSeed } from "./store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -47,6 +48,8 @@ app.use("/v1/admin/billing", billingRouter); // tenant billing console (secret k
 // /frontend/widget/feedback.js, /demo, /dashboard, /sdk
 const frontendDir = path.resolve(__dirname, "../../frontend");
 app.use("/frontend", express.static(frontendDir));
+// Attachment files when STORAGE=filesystem (empty/no-op in inline mode).
+app.use("/uploads", express.static(UPLOADS_DIR));
 app.get("/", (_req, res) => res.redirect("/demo"));
 app.get("/demo", (_req, res) =>
   res.sendFile(path.join(frontendDir, "widget", "demo.html"))

@@ -92,7 +92,8 @@ model ApiKey {
   id        String   @id
   tenantId  String
   projectId String? // public keys belong to a project; secret keys are tenant-wide
-  key       String   @unique // prototype: plaintext. Production: store a hash only.
+  keyHash   String?  @unique // sha256(key) — the lookup. Secrets are stored ONLY as this hash.
+  key       String? // plaintext kept only for PUBLIC keys (they're embedded in HTML anyway); null for secrets
   kind      String // public | secret
   active    Boolean  @default(true)
   tenant    Tenant   @relation(fields: [tenantId], references: [id])

@@ -93,7 +93,7 @@ cd backend
 npm run smoke
 ```
 
-It runs 64 checks across the whole system (in the zero-setup fallback mode) — ingest, auth/trust separation, validation, spam
+It runs 66 checks across the whole system (in the zero-setup fallback mode) — ingest, auth/trust separation, validation, spam
 honeypot, admin stats/list/filter/patch, **signup, simulated payments (incl. declined cards),
 token balance + spend-per-feedback + buying token packs, multi-tenant isolation, per-project
 origin lock-down, widget theming/branding, simulated Google login → onboarding → session-based
@@ -101,7 +101,7 @@ dashboard**, and that the widget + signup + React dashboard are served — print
 and exiting non-zero on any failure. Expected:
 
 ```
-✅ ALL PASS — 64 passed, 0 failed
+✅ ALL PASS — 66 passed, 0 failed
 ```
 
 ## The three integration surfaces (DESIGN.md §2)
@@ -170,12 +170,13 @@ because the page and API share an origin — across projects you must set it.)
 **4. View feedback as the admin.** Open <http://localhost:4000/dashboard>, paste your `sk_…`
 (or deep-link `…/dashboard/?key=sk_…`). You'll see **only** your org's submissions, live.
 
-> **Status: ready to test locally, not yet production-hardened.** The flow above is fully working.
-> Before going live you'd still want: hashed API keys (stored plaintext today), attachments on
-> S3/R2 (inlined as data-URLs today), a Redis-backed rate limiter (in-memory today), Postgres
-> (flip the Prisma `provider`), and the backend deployed behind HTTPS. (**Origin allow-lists**,
-> **real Google OAuth**, and **real Stripe Checkout** are all built in — see below.) See
-> [`DESIGN.md`](./DESIGN.md) §10.
+> **Status: fully working locally; the main production-hardening items are now built in.**
+> **API keys are hashed** (secrets stored as SHA-256, never plaintext), **attachment storage** is
+> pluggable (inline → filesystem → S3/R2), the **rate limiter** is behind a swappable store
+> (in-memory → Redis), and **origin allow-lists**, **real Google OAuth**, and **real Stripe
+> Checkout** are all available (see below). What's left for a real deployment is mostly ops:
+> a managed **Postgres**, an **S3/R2** bucket, **Redis**, and the backend behind **HTTPS**. See
+> [`DESIGN.md`](./DESIGN.md) §10 and [Production hardening](#production-hardening) below.
 
 ## Going live: real Google OAuth + Stripe (optional)
 
@@ -210,8 +211,24 @@ free **test-mode** credentials. Copy the keys into `backend/.env` (see `backend/
    via the Checkout session id). Pay with Stripe's test card `4242 4242 4242 4242`. (Implementation:
    `backend/src/billing/stripe.ts` + the `/v1/billing/checkout/return` endpoint.)
 
-> The 64-check smoke test runs against the **fallback** (no keys) path, so it stays green with zero
+> The 66-check smoke test runs against the **fallback** (no keys) path, so it stays green with zero
 > setup; the real paths activate only when the env vars are present.
+
+## Production hardening
+
+The security/architecture hardening is built in and **opt-in via env** where it needs external
+services, so the zero-setup prototype keeps working:
+
+| Concern | Prototype default | Production switch |
+|---|---|---|
+| **API key storage** | — *(always on)* | Secrets are stored as **SHA-256 hashes** (`keyHash`), never plaintext. The raw secret is shown **once** at signup/onboarding. Public keys keep plaintext (they ship in the customer's HTML). Lookups hash the incoming key. (`backend/src/store.ts` `hashKey`) |
+| **Attachments** | `inline` data-URLs in the DB | Set `STORAGE=filesystem` to write blobs to `./uploads` and store a `/uploads/…` URL instead. Adding S3/R2 is one `put()` branch in `backend/src/storage.ts` — nothing upstream changes. |
+| **Rate limiter** | in-memory store | Implement the `RedisStore` in `backend/src/middleware/rateLimit.ts` and set `REDIS_URL` for multi-instance counting. The middleware is already store-agnostic. |
+| **Database** | SQLite (`dev.db`) | Set `provider = "postgresql"` in `prisma/schema.prisma`, point `DATABASE_URL` at Postgres, `npx prisma db push`. All DB access is behind `store.ts`; the rest of the app is unchanged. (On Postgres you'd also switch the JSON-encoded `String` columns to native `Json`/enums.) |
+
+> Existing keys in a pre-hardening `dev.db` are migrated automatically on boot (hashed, and the
+> plaintext of secrets is dropped). The 66-check smoke test covers hashed-key auth and an
+> attachment round-trip.
 
 ## API summary
 
@@ -253,7 +270,9 @@ frontend/
 
 - ✅ ~~Replace the in-memory store with Prisma~~ — done (SQLite now; flip provider for Postgres).
 - ✅ ~~Build the dashboard as the planned React + Vite app~~ — done (`frontend/dashboard`).
-- Move attachments from inline data-URLs to S3/R2.
-- Hash API keys; add key-management endpoints to the admin API.
-- Build the dashboard as the planned React + Vite app; compile the widget with Vite to UMD/ESM.
-- Notifications/webhooks, billing, roles (Phase 2/3).
+- ✅ ~~Hash API keys~~ — done (SHA-256 hash-only secrets; see [Production hardening](#production-hardening)).
+- ✅ ~~Move attachments off inline data-URLs~~ — pluggable storage (`STORAGE=filesystem`; S3/R2 is one `put()` branch).
+- ✅ ~~Real accounts + billing~~ — Google login (mock + real OAuth), tokens, Stripe Checkout.
+- ✅ ~~Per-project origin allow-lists & widget theming~~ — done (Settings + Widget tabs).
+- Provision the managed services (Postgres, Redis, S3/R2) + deploy behind HTTPS.
+- Key-management endpoints (rotate/revoke) in the admin API; notifications/webhooks; team roles.

@@ -4,9 +4,11 @@
 // nothing above it. The exported signatures match the domain types in types.ts;
 // all functions are async because the DB is.
 
+import crypto from "node:crypto";
 import { nanoid } from "nanoid";
 import { prisma } from "./db.js";
 import { getPack, getPlan, starterTokens, type PlanId, type TokenPack } from "./plans.js";
+import { putAttachment } from "./storage.js";
 import type {
   ApiKey,
   Attachment,
@@ -169,9 +171,21 @@ function toFeedback(r: FeedbackRow): Feedback {
   };
 }
 
+// API keys are looked up by a SHA-256 hash, so the raw secret is never stored. (These are
+// high-entropy random tokens, not passwords, so a fast hash is the right tool — not bcrypt.)
+export function hashKey(key: string): string {
+  return crypto.createHash("sha256").update(key).digest("hex");
+}
+
+// Build the DB columns for a new key: secrets are hash-only; public keys also keep plaintext
+// (they ship inside the customer's HTML anyway, and the dashboard shows them for the embed).
+function keyColumns(plaintext: string, kind: "public" | "secret") {
+  return { keyHash: hashKey(plaintext), key: kind === "public" ? plaintext : null };
+}
+
 // ---- Auth lookups ----
 export async function findApiKey(key: string): Promise<ApiKey | undefined> {
-  const k = await prisma.apiKey.findUnique({ where: { key } });
+  const k = await prisma.apiKey.findUnique({ where: { keyHash: hashKey(key) } });
   if (!k || !k.active) return undefined;
   return {
     id: k.id,
@@ -267,6 +281,15 @@ export interface CreateFeedbackInput {
 }
 
 export async function createFeedback(input: CreateFeedbackInput): Promise<Feedback> {
+  // Route each blob through the storage layer (inline data URL, or written to disk → a URL).
+  const attachments = await Promise.all(
+    input.attachments.map(async (a) => ({
+      id: `att_${nanoid(10)}`,
+      filename: a.filename,
+      mime: a.mime,
+      dataUrl: await putAttachment(a),
+    }))
+  );
   const row = await prisma.feedback.create({
     data: {
       id: `fb_${nanoid(10)}`,
@@ -278,14 +301,7 @@ export async function createFeedback(input: CreateFeedbackInput): Promise<Feedba
       status: "new",
       endUser: input.endUser ? JSON.stringify(input.endUser) : null,
       metadata: JSON.stringify(input.metadata ?? {}),
-      attachments: {
-        create: input.attachments.map((a) => ({
-          id: `att_${nanoid(10)}`,
-          filename: a.filename,
-          mime: a.mime,
-          dataUrl: a.dataUrl,
-        })),
-      },
+      attachments: { create: attachments },
     },
     include: { attachments: true },
   });
@@ -673,8 +689,8 @@ export async function createTenantAccount(input: CreateAccountInput): Promise<Cr
       },
       apiKeys: {
         create: [
-          { id: `key_${nanoid(8)}`, projectId, key: publicKey, kind: "public" },
-          { id: `key_${nanoid(8)}`, projectId: null, key: secretKey, kind: "secret" },
+          { id: `key_${nanoid(8)}`, projectId, kind: "public", ...keyColumns(publicKey, "public") },
+          { id: `key_${nanoid(8)}`, projectId: null, kind: "secret", ...keyColumns(secretKey, "secret") },
         ],
       },
     },
@@ -824,14 +840,17 @@ export async function deleteSession(token: string | undefined): Promise<void> {
   await prisma.session.deleteMany({ where: { id: token } });
 }
 
-/** The tenant's plaintext keys (prototype only) — used to show the embed snippet. */
+/**
+ * The tenant's PUBLIC key, for showing the embed snippet. The secret key is hash-only and can't
+ * be retrieved — it's returned exactly once at signup/onboarding, never again.
+ */
 export async function getTenantKeys(
   tenantId: string
-): Promise<{ publicKey: string | null; secretKey: string | null }> {
+): Promise<{ publicKey: string | null; secretKey: null }> {
   const keys = await prisma.apiKey.findMany({ where: { tenantId } });
   return {
     publicKey: keys.find((k) => k.kind === "public")?.key ?? null,
-    secretKey: keys.find((k) => k.kind === "secret")?.key ?? null,
+    secretKey: null,
   };
 }
 
@@ -896,8 +915,8 @@ async function seedTenant(opts: {
       },
       apiKeys: {
         create: [
-          { id: `key_pub_${nanoid(6)}`, projectId: opts.projectId, key: opts.publicKey, kind: "public" },
-          { id: `key_sec_${nanoid(6)}`, projectId: null, key: opts.secretKey, kind: "secret" },
+          { id: `key_pub_${nanoid(6)}`, projectId: opts.projectId, kind: "public", ...keyColumns(opts.publicKey, "public") },
+          { id: `key_sec_${nanoid(6)}`, projectId: null, kind: "secret", ...keyColumns(opts.secretKey, "secret") },
         ],
       },
     },
@@ -971,4 +990,14 @@ export async function ensureSeed() {
     where: { id: { in: ["ten_acme", "ten_globex"] }, tokenBalance: { lt: 500 } },
     data: { tokenBalance: 100_000 },
   });
+
+  // One-time migration: hash any legacy plaintext keys, and drop the plaintext of secret keys.
+  const legacy = await prisma.apiKey.findMany({ where: { keyHash: null } });
+  for (const k of legacy) {
+    if (!k.key) continue;
+    await prisma.apiKey.update({
+      where: { id: k.id },
+      data: { keyHash: hashKey(k.key), key: k.kind === "public" ? k.key : null },
+    });
+  }
 }

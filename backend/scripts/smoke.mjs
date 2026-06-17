@@ -135,6 +135,23 @@ async function main() {
   });
   ok("admin patch of unknown id (404)", ghost.status === 404, `got ${ghost.status}`);
 
+  // --- attachments round-trip through the storage layer (inline by default) ---
+  const PNG =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  const withAtt = await fetch(`${BASE}/v1/feedback`, {
+    method: "POST", headers: j(PUBLIC),
+    body: JSON.stringify({
+      type: "bug", message: "bug with a screenshot",
+      attachments: [{ filename: "shot.png", mime: "image/png", dataUrl: PNG }],
+    }),
+  });
+  const attCreated = await withAtt.json();
+  ok("ingest accepts an attachment (201)", withAtt.status === 201, `got ${withAtt.status}`);
+  const attList = await (await fetch(`${BASE}/v1/admin/feedback?q=screenshot`, { headers: j(SECRET) })).json();
+  const attItem = attList.items.find((i) => i.id === attCreated.id);
+  ok("attachment is stored and returned with a url",
+    !!attItem && attItem.attachments?.length === 1 && typeof attItem.attachments[0].dataUrl === "string");
+
   // --- frontends are served ---
   const demo = await fetch(`${BASE}/demo`);
   ok("widget demo page served (200)", demo.status === 200);

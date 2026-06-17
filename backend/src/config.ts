@@ -24,3 +24,10 @@ export const stripe = {
 export function isStripeConfigured(): boolean {
   return Boolean(stripe.secretKey);
 }
+
+// Attachment storage backend: "inline" keeps the data-URL in the DB row (zero setup);
+// "filesystem" writes the blob to disk and stores a URL (the production shape — swap for S3/R2).
+export type StorageMode = "inline" | "filesystem";
+export function storageMode(): StorageMode {
+  return process.env.STORAGE === "filesystem" ? "filesystem" : "inline";
+}
