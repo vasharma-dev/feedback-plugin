@@ -119,6 +119,45 @@ curl -X POST http://localhost:4000/v1/feedback \
        "metadata":{"appVersion":"2.1.0","os":"iOS 17"}}'
 ```
 
+## Integrate into your own project (local testing)
+
+Drop the widget into **any** local app or site you're building and see the feedback land in
+**your** dashboard only — each org's keys are fully isolated from every other org's.
+
+**1. Run the backend** (it's the API + dashboard host):
+
+```bash
+cd backend && cp .env.example .env && npm install && npm run dev   # → http://localhost:4000
+```
+
+**2. Get your own keys.** Open <http://localhost:4000/signup>, create an org (the **free** plan
+needs no card). You'll get a **public** key (`pk_…`, for the widget) and a **secret** key
+(`sk_…`, for your dashboard). _Or_ just reuse the seeded demo keys `pk_demo_acme_123` /
+`sk_demo_acme_456`.
+
+**3. Embed the widget** in your project's HTML. Because your app runs on a different port than
+the backend, point `data-api` at the backend — CORS is open, so cross-origin works:
+
+```html
+<script src="http://localhost:4000/frontend/widget/feedback.js"
+        data-key="pk_YOUR_PUBLIC_KEY"
+        data-api="http://localhost:4000"
+        data-color="#6C2BD9"></script>
+```
+
+A floating 💬 button appears. (Inside this prototype's own `/demo` page, `data-api` is omitted
+because the page and API share an origin — across projects you must set it.)
+
+**4. View feedback as the admin.** Open <http://localhost:4000/dashboard>, paste your `sk_…`
+(or deep-link `…/dashboard/?key=sk_…`). You'll see **only** your org's submissions, live.
+
+> **Status: ready to test locally, not yet production-hardened.** The flow above is fully working.
+> Before going live you'd still want: hashed API keys (stored plaintext today), real Stripe
+> (charges are simulated), attachments on S3/R2 (inlined as data-URLs today), a Redis-backed rate
+> limiter (in-memory today), Postgres (flip the Prisma `provider`), the backend deployed behind
+> HTTPS, and per-project origin allow-lists (new orgs default to `["*"]`). See
+> [`DESIGN.md`](./DESIGN.md) §10.
+
 ## API summary
 
 | Method | Path | Auth | Purpose |
