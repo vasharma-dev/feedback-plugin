@@ -437,9 +437,10 @@ async function main() {
     method: "PATCH", headers: { ...saH, "Content-Type": "application/json" }, body: JSON.stringify({ priceCents: 900 }),
   });
 
+  // Clients = only real Google-authenticated orgs (mock/seed/API signups are filtered out).
   const saOrgs = await (await fetch(`${BASE}/v1/superadmin/orgs`, { headers: saH })).json();
-  ok("super admin sees all orgs with feedback counts",
-    Array.isArray(saOrgs.orgs) && saOrgs.orgs.length >= 2 && typeof saOrgs.orgs[0].feedbackCount === "number");
+  ok("super admin clients list returns real orgs only",
+    Array.isArray(saOrgs.orgs) && saOrgs.orgs.every((o) => typeof o.feedbackCount === "number" && o.ownerEmail));
 
   // Platform settings (Stripe / payments).
   ok("super admin settings require auth (401)", (await fetch(`${BASE}/v1/superadmin/settings`)).status === 401);

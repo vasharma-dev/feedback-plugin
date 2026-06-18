@@ -125,8 +125,9 @@
       <!-- CLIENTS TAB -->
       <section id="tab-clients" style="display:none">
         <h2>Organizations using jicama</h2>
+        <p class="help" style="margin:-4px 0 12px">Real Google-authenticated accounts only.</p>
         <table>
-          <thead><tr><th>Organization</th><th>Website</th><th>Plan</th><th>Tokens</th><th>Feedback</th><th>Billing email</th></tr></thead>
+          <thead><tr><th>Organization</th><th>Owner (Google)</th><th>Website</th><th>Plan</th><th>Tokens</th><th>Feedback</th></tr></thead>
           <tbody id="orgs"></tbody>
         </table>
       </section>
@@ -241,14 +242,14 @@
           var tr=document.createElement("tr");
           tr.innerHTML =
             '<td><b>'+esc(o.name)+'</b></td>'+
+            '<td style="color:#475569">'+esc(o.ownerEmail||o.billingEmail||"—")+'</td>'+
             '<td style="color:#64748b">'+(o.website?('<a href="'+esc(o.website)+'" target="_blank" rel="noreferrer">'+esc(o.website)+'</a>'):'—')+'</td>'+
             '<td><span class="tag">'+esc(o.plan)+'</span></td>'+
             '<td class="mono">'+o.tokenBalance.toLocaleString()+'</td>'+
-            '<td class="mono">'+o.feedbackCount+'</td>'+
-            '<td style="color:#64748b">'+esc(o.billingEmail||"—")+'</td>';
+            '<td class="mono">'+o.feedbackCount+'</td>';
           tb.appendChild(tr);
         });
-        if(d.orgs.length===0) tb.innerHTML = '<tr><td colspan="6" style="color:#94a3b8;text-align:center;padding:24px">No organizations yet.</td></tr>';
+        if(d.orgs.length===0) tb.innerHTML = '<tr><td colspan="6" style="color:#94a3b8;text-align:center;padding:24px">No Google-authenticated clients yet.</td></tr>';
       });
     }
 

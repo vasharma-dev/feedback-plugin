@@ -978,11 +978,17 @@ export async function deleteSuperAdminSession(token: string | undefined): Promis
   await prisma.superAdminSession.deleteMany({ where: { id: token } });
 }
 
-/** Every org with the numbers the platform owner cares about. */
+/**
+ * Real client organizations for the Super Admin "Clients" tab — only orgs owned by a Google-
+ * authenticated user. This filters out the seeded demo orgs and API/test signups (which have no
+ * linked user) and simulated mock logins (whose googleId is "mock_…").
+ */
 export async function listOrgsOverview() {
-  const tenants = await prisma.tenant.findMany({ orderBy: { createdAt: "desc" } });
+  const tenants = await prisma.tenant.findMany({ orderBy: { createdAt: "desc" }, include: { users: true } });
   const out = [];
   for (const t of tenants) {
+    const owner = t.users.find((u) => u.googleId && !u.googleId.startsWith("mock_"));
+    if (!owner) continue; // not a real Google-authenticated account → skip
     const feedbackCount = await prisma.feedback.count({ where: { tenantId: t.id } });
     out.push({
       id: t.id,
@@ -991,6 +997,8 @@ export async function listOrgsOverview() {
       plan: t.plan,
       tokenBalance: t.tokenBalance,
       billingEmail: t.billingEmail,
+      ownerEmail: owner.email,
+      ownerName: owner.name,
       feedbackCount,
       createdAt: t.createdAt.toISOString(),
     });
