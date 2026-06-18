@@ -53,8 +53,9 @@ const frontendDir = path.resolve(__dirname, "../../frontend");
 app.use("/frontend", express.static(frontendDir));
 // Attachment files when STORAGE=filesystem (empty/no-op in inline mode).
 app.use("/uploads", express.static(UPLOADS_DIR));
-// Product landing page (Get Started → Google sign-in → dashboard).
+// Product landing page (Get Started → Login → Google sign-in → dashboard).
 app.get("/", (_req, res) => res.sendFile(path.join(frontendDir, "landing", "index.html")));
+app.get("/login", (_req, res) => res.sendFile(path.join(frontendDir, "login", "index.html")));
 app.get("/demo", (_req, res) =>
   res.sendFile(path.join(frontendDir, "widget", "demo.html"))
 );

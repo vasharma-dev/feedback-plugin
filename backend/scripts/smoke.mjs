@@ -441,7 +441,10 @@ async function main() {
     Array.isArray(saOrgs.orgs) && saOrgs.orgs.length >= 2 && typeof saOrgs.orgs[0].feedbackCount === "number");
 
   ok("landing page served at / (200)", (await fetch(`${BASE}/`)).status === 200);
+  ok("login page served at /login (200)", (await fetch(`${BASE}/login`)).status === 200);
   ok("super admin panel served at /admin (200)", (await fetch(`${BASE}/admin`)).status === 200);
+  const pubPacks = await (await fetch(`${BASE}/v1/packs`)).json();
+  ok("public token-pack catalogue served", Array.isArray(pubPacks.packs) && pubPacks.packs.length >= 3 && !!pubPacks.packs[0].priceLabel);
 
   // --- signup page served ---
   const signupPage = await fetch(`${BASE}/signup`);

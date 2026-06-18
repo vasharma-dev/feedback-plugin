@@ -14,6 +14,30 @@
 A runnable, end-to-end prototype of the system described in [`DESIGN.md`](./DESIGN.md):
 a hosted backend (ingest + admin API), an embeddable widget, a JS SDK, and a tenant dashboard.
 
+## 🔌 Add jicama feedback to your site
+
+jicama is a **drop-in feedback plugin**. Get a key, paste one tag, done — a themed feedback
+button shows up and submissions land in your private dashboard.
+
+1. **Get your key** — open the landing page → **Get Started** → sign in with Google. You get a
+   public key (`pk_…`) instantly.
+2. **Embed it** — drop this into your site's HTML (point `data-api` at your jicama backend):
+
+   ```html
+   <script src="https://YOUR-BACKEND/frontend/widget/feedback.js"
+           data-key="pk_your_key"
+           data-api="https://YOUR-BACKEND"></script>
+   ```
+
+3. **See feedback** — open your dashboard. That's it. Theme the widget, lock it to your domain,
+   and buy token packs from the dashboard as you grow.
+
+> **Pitching it / linking from your company site:** point a "Feedback" or "Get Started" button at
+> your hosted landing page (`https://YOUR-BACKEND/`), and add the `<script>` above to start
+> collecting. Prefer code? The whole thing is open on
+> **[GitHub](https://github.com/vasharma-dev/feedback-plugin)** — clone, `npm run dev`, and it's
+> live locally in one command (see [Run it](#run-it)).
+
 > **Prototype scope:** data persists in **SQLite via Prisma** (a single `dev.db` file), seeded
 > with a demo tenant — so it runs with zero external services and survives restarts. The schema
 > matches DESIGN.md §6 exactly; going to Postgres is a one-line change (`provider = "postgresql"`
@@ -36,8 +60,9 @@ Then open:
 
 | URL | What |
 |-----|------|
-| http://localhost:4000/ | **Landing page** — hero + **Get Started** (→ Google sign-in → dashboard), footer **Super Admin** link |
-| http://localhost:4000/demo | A pretend tenant app with the widget embedded (try the 💬 button) |
+| http://localhost:4000/ | **Landing page** — what jicama is, how to integrate, live pricing; **Get Started** → login |
+| http://localhost:4000/login | **Login** — "Continue with Google" → onboarding → your dashboard |
+| http://localhost:4000/demo | A pretend customer site ("Acme") with the widget embedded — try the 💬 button |
 | http://localhost:4000/signup | **Pricing + self-serve signup** — pick a plan & pay (test mode), or **Continue with Google** for instant onboarding |
 | http://localhost:4000/auth/google | **Simulated "Sign in with Google"** → onboarding form → personalized dashboard |
 | http://localhost:4000/dashboard | The tenant admin console (React + Vite + Tailwind) — **Feedback inbox**, **Widget** (theming), **Billing**, **Settings** tabs |
@@ -101,7 +126,7 @@ cd backend
 npm run smoke
 ```
 
-It runs 77 checks across the whole system (in the zero-setup fallback mode) — ingest, auth/trust separation, validation, spam
+It runs 79 checks across the whole system (in the zero-setup fallback mode) — ingest, auth/trust separation, validation, spam
 honeypot, admin stats/list/filter/patch, **signup, simulated payments (incl. declined cards),
 token balance + spend-per-feedback + buying token packs, multi-tenant isolation, per-project
 origin lock-down, widget theming/branding, simulated Google login → onboarding → session-based
@@ -109,7 +134,7 @@ dashboard**, and that the widget + signup + React dashboard are served — print
 and exiting non-zero on any failure. Expected:
 
 ```
-✅ ALL PASS — 77 passed, 0 failed
+✅ ALL PASS — 79 passed, 0 failed
 ```
 
 ## The three integration surfaces (DESIGN.md §2)

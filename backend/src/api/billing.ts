@@ -43,6 +43,15 @@ publicBillingRouter.get("/plans", (_req, res) => {
   });
 });
 
+// Public token-pack catalogue (DB-backed pricing) — used by the landing page.
+publicBillingRouter.get("/packs", async (_req, res, next) => {
+  try {
+    res.json({ packs: await packsView() });
+  } catch (err) {
+    next(err);
+  }
+});
+
 const cardSchema = z.object({
   number: z.string().min(12).max(25),
   expMonth: z.coerce.number().int().min(1).max(12),
