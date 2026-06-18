@@ -157,6 +157,12 @@
 
     close: function () {
       this.state.open = false;
+      if (this._escHandler) { document.removeEventListener("keydown", this._escHandler); this._escHandler = null; }
+      // Restore the page's scrolling exactly as it was before we opened.
+      if (this._prevBodyOverflow !== undefined) {
+        document.body.style.overflow = this._prevBodyOverflow;
+        this._prevBodyOverflow = undefined;
+      }
       if (this.modal) { this.modal.remove(); this.modal = null; }
     },
 
@@ -245,7 +251,8 @@
         style: {
           background: this.cfg.theme.dialogBg || "#fff", borderRadius: "18px", padding: "22px", width: "min(440px, 94vw)",
           boxShadow: "0 24px 70px rgba(0,0,0,.32)", font: "14px " + FONT, color: pal.text,
-          maxHeight: "92vh", overflow: "auto", "--jcm": color,
+          maxHeight: "92vh", overflowY: "auto", overscrollBehavior: "contain",
+          WebkitOverflowScrolling: "touch", "--jcm": color,
         },
       }, [
         el("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" } }, [
@@ -267,6 +274,7 @@
           position: "fixed", inset: "0", background: "rgba(15,23,42,.5)", backdropFilter: "blur(3px)",
           WebkitBackdropFilter: "blur(3px)", zIndex: 2147483647,
           display: "flex", alignItems: "center", justifyContent: "center", padding: "16px",
+          overflowY: "auto", overscrollBehavior: "contain",
         },
         onclick: function (e) { if (e.target === overlay) self.close(); },
       }, [card]);
@@ -274,6 +282,9 @@
       this.modal = overlay;
       this._escHandler = function (e) { if (e.key === "Escape") self.close(); };
       document.addEventListener("keydown", this._escHandler);
+      // Lock background scrolling so the wheel/touch acts on the dialog, not the page.
+      this._prevBodyOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
       document.body.appendChild(overlay);
       this._refreshChips(); this._refreshStars();
       setTimeout(function () { textarea.focus(); }, 50);
