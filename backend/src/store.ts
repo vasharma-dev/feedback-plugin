@@ -978,6 +978,12 @@ export async function deleteSuperAdminSession(token: string | undefined): Promis
   await prisma.superAdminSession.deleteMany({ where: { id: token } });
 }
 
+/** Super Admin: move a client to another plan (free/pro/enterprise). No charge. */
+export async function setTenantPlan(tenantId: string, plan: PlanId): Promise<boolean> {
+  const res = await prisma.tenant.updateMany({ where: { id: tenantId }, data: { plan } });
+  return res.count > 0;
+}
+
 /**
  * Real client organizations for the Super Admin "Clients" tab — only orgs owned by a Google-
  * authenticated user. This filters out the seeded demo orgs and API/test signups (which have no

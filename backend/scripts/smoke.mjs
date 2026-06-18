@@ -442,6 +442,20 @@ async function main() {
   ok("super admin clients list returns real orgs only",
     Array.isArray(saOrgs.orgs) && saOrgs.orgs.every((o) => typeof o.feedbackCount === "number" && o.ownerEmail));
 
+  // Super admin can move a client between plans (tested against the seeded Acme org).
+  const planPatch = (plan) => fetch(`${BASE}/v1/superadmin/orgs/ten_acme`, {
+    method: "PATCH", headers: { ...saH, "Content-Type": "application/json" }, body: JSON.stringify({ plan }),
+  });
+  ok("super admin changes a client's plan (200)", (await planPatch("free")).status === 200);
+  const acmeBill = await (await fetch(`${BASE}/v1/admin/billing`, { headers: j(SECRET) })).json();
+  ok("plan change is live for the client", acmeBill.plan?.id === "free");
+  await planPatch("pro"); // restore
+  ok("super admin rejects an unknown plan (422)", (await planPatch("ultra")).status === 422);
+  const ghostOrg = await fetch(`${BASE}/v1/superadmin/orgs/does_not_exist`, {
+    method: "PATCH", headers: { ...saH, "Content-Type": "application/json" }, body: JSON.stringify({ plan: "free" }),
+  });
+  ok("super admin plan change on unknown org (404)", ghostOrg.status === 404, `got ${ghostOrg.status}`);
+
   // Platform settings (Stripe / payments).
   ok("super admin settings require auth (401)", (await fetch(`${BASE}/v1/superadmin/settings`)).status === 401);
   const saSettings = await (await fetch(`${BASE}/v1/superadmin/settings`, { headers: saH })).json();

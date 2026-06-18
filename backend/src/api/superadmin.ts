@@ -4,7 +4,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { Router } from "express";
 import { z } from "zod";
-import { formatPackPrice } from "../plans.js";
+import { formatPackPrice, isPlanId } from "../plans.js";
 import { getStripeSecretKey, isStripeConfigured, maskKey, setStripeSecretKey } from "../settings.js";
 import {
   createSuperAdminSession,
@@ -12,6 +12,7 @@ import {
   getSuperAdminBySession,
   listOrgsOverview,
   listTokenPacks,
+  setTenantPlan,
   updateTokenPack,
   verifySuperAdmin,
 } from "../store.js";
@@ -104,6 +105,21 @@ superAdminRouter.patch("/packs/:id", requireSuperAdmin, async (req, res, next) =
 superAdminRouter.get("/orgs", requireSuperAdmin, async (_req, res, next) => {
   try {
     res.json({ orgs: await listOrgsOverview() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const orgPlanSchema = z.object({ plan: z.string().refine(isPlanId, "unknown plan") });
+
+// PATCH /v1/superadmin/orgs/:id  { plan } — move a client to free/pro/enterprise.
+superAdminRouter.patch("/orgs/:id", requireSuperAdmin, async (req, res, next) => {
+  try {
+    const parsed = orgPlanSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(422).json({ error: "validation_error" });
+    const ok = await setTenantPlan(req.params.id, parsed.data.plan as "free" | "pro" | "enterprise");
+    if (!ok) return res.status(404).json({ error: "org_not_found" });
+    res.json({ ok: true, id: req.params.id, plan: parsed.data.plan });
   } catch (err) {
     next(err);
   }
