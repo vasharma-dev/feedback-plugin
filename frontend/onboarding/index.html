@@ -66,32 +66,11 @@
       <button id="submit" class="btn">Complete registration →</button>
       <p class="foot">🍠 jicama feedback</p>
     </div>
-
-    <!-- SUCCESS: API key + integration -->
-    <div id="done">
-      <div class="check">✓</div>
-      <h1 style="text-align:center">You're all set 🎉</h1>
-      <p class="sub" style="text-align:center" id="doneSub">Your dashboard is ready.</p>
-
-      <div class="note"><b>Your API keys</b> — the secret key is shown only once, save it now.</div>
-      <div class="keys">
-        <div class="row"><span class="k">PUBLIC key (for the widget)</span><button class="copy" data-copy="pk">Copy</button></div>
-        <div id="pk"></div>
-        <div class="row" style="margin-top:8px"><span class="k">SECRET key (for your dashboard)</span><button class="copy" data-copy="sk">Copy</button></div>
-        <div id="sk"></div>
-      </div>
-
-      <div class="note"><b>Add the widget to your site</b> — paste this one tag:</div>
-      <pre id="snippet"></pre>
-
-      <button id="openDash" class="btn">Open my dashboard →</button>
-    </div>
   </div>
 
   <script>
     var $ = function(id){ return document.getElementById(id); };
     function showErr(m){ var e=$("err"); e.textContent="⚠ "+m; e.style.display="block"; }
-    var pk = "", sk = "";
 
     // Confirm there's a session; bounce to login if not, to the dashboard if already registered.
     fetch("/v1/me").then(function(r){
@@ -122,29 +101,10 @@
         });
         var b = await r.json();
         if(!r.ok) throw new Error(b.message || b.error || "Registration failed");
-        pk = b.publicKey; sk = b.secretKey;
-        showSuccess(b);
+        // Keys live in the dashboard (Settings → Your API key), not here. Go straight there.
+        location.href = "/dashboard";
       } catch(e){ showErr(e.message); btn.disabled=false; btn.textContent="Complete registration →"; }
     };
-
-    function showSuccess(b){
-      $("form").style.display="none";
-      $("doneSub").textContent = b.name + " is ready. Here are your keys and snippet.";
-      $("pk").textContent = pk;
-      $("sk").textContent = sk;
-      $("snippet").textContent =
-        '<script src="'+location.origin+'/frontend/widget/feedback.js"\n        data-key="'+pk+'"\n        data-api="'+location.origin+'"><\/script>';
-      $("openDash").onclick = function(){ location.href = "/dashboard/?key=" + encodeURIComponent(sk); };
-      $("done").style.display="block";
-    }
-
-    document.querySelectorAll(".copy").forEach(function(btn){
-      btn.onclick = function(){
-        var v = btn.getAttribute("data-copy")==="pk" ? pk : sk;
-        if(navigator.clipboard) navigator.clipboard.writeText(v);
-        btn.textContent="Copied!"; setTimeout(function(){ btn.textContent="Copy"; }, 1200);
-      };
-    });
   </script>
 </body>
 </html>

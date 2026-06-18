@@ -33,6 +33,10 @@ export default function Settings({ apiKey }: { apiKey: string }) {
 
   return (
     <div className="space-y-5">
+      {projects.map((p) => (
+        <ApiKeyCard key={`k-${p.id}`} project={p} />
+      ))}
+
       <div className="bg-brand-50 border border-brand-100 rounded-2xl px-5 py-4 text-sm text-slate-600">
         <span className="font-semibold text-brand-700">Allowed origins</span> lock a project's{" "}
         <span className="font-mono text-xs">pk_…</span> public key to the sites you choose. If the
@@ -42,6 +46,56 @@ export default function Settings({ apiKey }: { apiKey: string }) {
       {projects.map((p) => (
         <OriginEditor key={p.id} apiKey={apiKey} project={p} />
       ))}
+    </div>
+  );
+}
+
+function ApiKeyCard({ project }: { project: Project }) {
+  const [copied, setCopied] = useState<"key" | "snippet" | null>(null);
+  const pk = project.publicKey || "pk_…";
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://your-backend";
+  const snippet = `<script src="${origin}/frontend/widget/feedback.js"\n        data-key="${pk}"\n        data-api="${origin}"></script>`;
+
+  async function copy(text: string, which: "key" | "snippet") {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(which);
+      setTimeout(() => setCopied(null), 1400);
+    } catch {
+      /* clipboard blocked — ignore */
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200/70 shadow-card p-5">
+      <div className="font-semibold text-slate-900">Your API key</div>
+      <p className="text-sm text-slate-500 mt-0.5">
+        This is your <span className="font-medium">public</span> key — put it in your site's widget. It's safe to expose.
+      </p>
+
+      <div className="mt-3 flex items-center gap-2">
+        <code className="flex-1 font-mono text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 truncate">
+          {pk}
+        </code>
+        <button
+          onClick={() => copy(pk, "key")}
+          className="shrink-0 inline-flex items-center gap-1.5 text-sm font-medium text-brand-700 border border-slate-200 hover:border-slate-300 rounded-xl px-3 py-2.5 transition"
+        >
+          {copied === "key" ? "Copied!" : "Copy"}
+        </button>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between">
+        <div className="text-sm font-medium text-slate-700">Embed snippet</div>
+        <button onClick={() => copy(snippet, "snippet")} className="text-xs font-medium text-brand-700 hover:text-brand-800">
+          {copied === "snippet" ? "Copied!" : "Copy"}
+        </button>
+      </div>
+      <pre className="mt-1.5 text-xs bg-slate-900 text-slate-100 rounded-xl p-3 overflow-x-auto whitespace-pre">{snippet}</pre>
+
+      <p className="text-xs text-slate-400 mt-2">
+        Your <span className="font-medium">secret</span> key (for the REST admin API) was shown once at sign-up — you sign in here with Google, so you won't need it for the dashboard.
+      </p>
     </div>
   );
 }
