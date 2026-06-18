@@ -59,7 +59,7 @@
       ".jcm-card{animation:jcm-pop .24s cubic-bezier(.2,.8,.25,1) both}" +
       ".jcm-chip{transition:all .12s ease}" +
       ".jcm-x{transition:background .12s ease,color .12s ease}" +
-      ".jcm-x:hover{background:#f1f5f9;color:#0f172a}" +
+      ".jcm-x:hover{background:rgba(128,128,128,.18)}" +
       ".jcm-ta{transition:border-color .12s ease, box-shadow .12s ease}" +
       ".jcm-ta:focus{border-color:var(--jcm)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--jcm) 22%,transparent)}" +
       ".jcm-ta::placeholder{color:#94a3b8}" +
@@ -68,7 +68,7 @@
       ".jcm-submit:active:not(:disabled){transform:translateY(1px)}" +
       ".jcm-submit:disabled{opacity:.6;cursor:default}" +
       ".jcm-attach{transition:border-color .12s ease,background .12s ease}" +
-      ".jcm-attach:hover{border-color:var(--jcm);background:#fafafa}" +
+      ".jcm-attach:hover{border-color:var(--jcm);background:rgba(128,128,128,.08)}" +
       ".jcm-star{transition:transform .1s ease}" +
       ".jcm-star:hover{transform:scale(1.18)}" +
       ".jcm-check{animation:jcm-pop-in .4s cubic-bezier(.2,.9,.3,1.2) both}";
@@ -162,12 +162,14 @@
 
     _renderModal: function () {
       var self = this, color = this.cfg.theme.color;
+      var pal = paletteFor(this.cfg.theme.dialogBg || "#fff");
+      this._pal = pal;
 
       var typeRow = el("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" } },
         TYPES.map(function (t) {
           return el("button", {
             "class": "jcm-chip", "data-type": t.id, title: t.hint,
-            style: chipStyle(t.id === self.state.type, color),
+            style: chipStyle(t.id === self.state.type, color, pal),
             onclick: function () { self.state.type = t.id; self._refreshChips(); },
           }, [t.label]);
         }));
@@ -189,8 +191,8 @@
         placeholder: "Tell us what's on your mind…", rows: "4",
         style: {
           width: "100%", boxSizing: "border-box", padding: "11px 12px", marginTop: "2px",
-          border: "1px solid #e2e8f0", borderRadius: "10px", font: "14px " + FONT,
-          resize: "vertical", color: "#0f172a", outline: "none", background: "#fff",
+          border: "1px solid " + pal.inputBorder, borderRadius: "10px", font: "14px " + FONT,
+          resize: "vertical", color: pal.text, outline: "none", background: pal.inputBg,
         },
       });
       this._textarea = textarea;
@@ -202,8 +204,8 @@
       var attachLabel = el("div", { "class": "jcm-attach",
         style: {
           display: "flex", alignItems: "center", gap: "8px", marginTop: "2px",
-          border: "1px dashed #cbd5e1", borderRadius: "10px", padding: "10px 12px",
-          color: "#475569", font: "13px " + FONT, cursor: "pointer",
+          border: "1px dashed " + pal.attachBorder, borderRadius: "10px", padding: "10px 12px",
+          color: pal.muted, font: "13px " + FONT, cursor: "pointer",
         },
         onclick: function () { if (self.state.attachment) { self._clearFile(); } else { fileInput.click(); } },
       }, ["📎 ", el("span", { "data-attach-text": "1" }, ["Attach a screenshot (optional)"]), fileInput]);
@@ -215,7 +217,7 @@
         style: { position: "absolute", left: "-9999px", opacity: "0", height: "0", width: "0" } });
       this._honeypot = honeypot;
 
-      var status = el("div", { style: { font: "13px " + FONT, minHeight: "18px", color: "#64748b", marginTop: "8px" } });
+      var status = el("div", { style: { font: "13px " + FONT, minHeight: "18px", color: pal.muted, marginTop: "8px" } });
       this._status = status;
 
       var submit = el("button", {
@@ -230,10 +232,10 @@
       this._submit_btn = submit;
 
       var body = el("div", {}, [
-        label("What's this about?"), typeRow,
-        label("How was your experience?"), stars,
-        label("Your message"), textarea,
-        label("Attachment"), attachLabel,
+        label("What's this about?", pal), typeRow,
+        label("How was your experience?", pal), stars,
+        label("Your message", pal), textarea,
+        label("Attachment", pal), attachLabel,
         honeypot, submit, status,
       ]);
       this._body = body;
@@ -242,20 +244,20 @@
         "class": "jcm-card",
         style: {
           background: this.cfg.theme.dialogBg || "#fff", borderRadius: "18px", padding: "22px", width: "min(440px, 94vw)",
-          boxShadow: "0 24px 70px rgba(0,0,0,.32)", font: "14px " + FONT, color: "#0f172a",
+          boxShadow: "0 24px 70px rgba(0,0,0,.32)", font: "14px " + FONT, color: pal.text,
           maxHeight: "92vh", overflow: "auto", "--jcm": color,
         },
       }, [
         el("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" } }, [
           el("div", {}, [
             el("div", { style: { fontSize: "17px", fontWeight: "700", letterSpacing: "-.01em" } }, [this.cfg.theme.headerTitle || "Share your feedback"]),
-            el("div", { style: { margin: "3px 0 0", color: "#64748b", fontSize: "13px" } }, [this.cfg.theme.headerSubtitle || "We read every message — thank you for helping us improve."]),
+            el("div", { style: { margin: "3px 0 0", color: pal.muted, fontSize: "13px" } }, [this.cfg.theme.headerSubtitle || "We read every message — thank you for helping us improve."]),
           ]),
-          el("button", { "class": "jcm-x", title: "Close", style: closeBtnStyle, onclick: this.close.bind(this) }, ["✕"]),
+          el("button", { "class": "jcm-x", title: "Close", style: closeBtnStyle(pal), onclick: this.close.bind(this) }, ["✕"]),
         ]),
         el("div", { style: { height: "14px" } }),
         body,
-        this.cfg.theme.hideBranding ? null : footer(),
+        this.cfg.theme.hideBranding ? null : footer(pal),
       ]);
       this._card = card;
 
@@ -278,9 +280,9 @@
     },
 
     _refreshChips: function () {
-      var color = this.cfg.theme.color, self = this;
+      var color = this.cfg.theme.color, self = this, pal = this._pal;
       [].forEach.call(this._typeRow.children, function (c) {
-        Object.assign(c.style, chipStyle(c.getAttribute("data-type") === self.state.type, color));
+        Object.assign(c.style, chipStyle(c.getAttribute("data-type") === self.state.type, color, pal));
       });
     },
     _refreshStars: function () {
@@ -288,7 +290,7 @@
       [].forEach.call(this._stars.children, function (s) {
         var i = Number(s.getAttribute("data-star"));
         s.textContent = i <= lit ? "★" : "☆";
-        s.style.color = i <= lit ? "#f59e0b" : "#cbd5e1";
+        s.style.color = i <= lit ? "#f59e0b" : self._pal.starOff;
       });
     },
     _onFile: function (e) {
@@ -310,8 +312,8 @@
       if (this._fileInput) this._fileInput.value = "";
       var txt = this._attachLabel.querySelector("[data-attach-text]");
       if (txt) txt.textContent = "Attach a screenshot (optional)";
-      this._attachLabel.style.color = "#475569";
-      this._attachLabel.style.borderColor = "#cbd5e1";
+      this._attachLabel.style.color = this._pal.muted;
+      this._attachLabel.style.borderColor = this._pal.attachBorder;
     },
 
     _submit: function () {
@@ -325,7 +327,7 @@
       }
       this._submit_btn.disabled = true;
       this._submit_btn.textContent = "Sending…";
-      this._status.style.color = "#64748b";
+      this._status.style.color = this._pal.muted;
       this._status.textContent = "";
 
       var payload = {
@@ -365,7 +367,7 @@
           justifyContent: "center", fontSize: "30px", fontWeight: "700",
         } }, ["✓"]),
         el("div", { style: { fontSize: "18px", fontWeight: "700" } }, ["Thank you! 🎉"]),
-        el("div", { style: { color: "#64748b", marginTop: "4px", fontSize: "14px" } }, ["Your feedback has been sent to the team."]),
+        el("div", { style: { color: this._pal.muted, marginTop: "4px", fontSize: "14px" } }, ["Your feedback has been sent to the team."]),
       ]);
       this._body.replaceWith(success);
       this._body = success;
@@ -374,28 +376,44 @@
   };
 
   // ---- styling helpers ----
-  function chipStyle(active, color) {
+  // Pick a readable text palette based on how dark the dialog background is, so a dark
+  // dialogBg automatically gets light text (and vice-versa).
+  function paletteFor(bg) {
+    var m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(bg || "");
+    var r = m ? parseInt(m[1], 16) : 255, g = m ? parseInt(m[2], 16) : 255, b = m ? parseInt(m[3], 16) : 255;
+    var dark = (0.299 * r + 0.587 * g + 0.114 * b) < 140; // perceived luminance
+    return dark
+      ? { text: "#f1f5f9", muted: "#94a3b8", label: "#cbd5e1", inputBg: "rgba(255,255,255,.06)",
+          inputBorder: "rgba(255,255,255,.18)", chipBg: "rgba(255,255,255,.06)", chipBorder: "rgba(255,255,255,.18)",
+          chipText: "#cbd5e1", attachBorder: "rgba(255,255,255,.25)", footerBorder: "rgba(255,255,255,.12)", starOff: "#475569" }
+      : { text: "#0f172a", muted: "#64748b", label: "#334155", inputBg: "#fff",
+          inputBorder: "#e2e8f0", chipBg: "#fff", chipBorder: "#e2e8f0",
+          chipText: "#334155", attachBorder: "#cbd5e1", footerBorder: "#f1f5f9", starOff: "#cbd5e1" };
+  }
+  function chipStyle(active, color, pal) {
     return {
-      border: "1px solid " + (active ? color : "#e2e8f0"),
-      background: active ? hexA(color, 0.1) : "#fff",
-      color: active ? color : "#334155",
+      border: "1px solid " + (active ? color : pal.chipBorder),
+      background: active ? hexA(color, 0.16) : pal.chipBg,
+      color: active ? color : pal.chipText,
       fontWeight: active ? "600" : "500",
       borderRadius: "10px", padding: "9px 12px", cursor: "pointer",
       font: (active ? "600" : "500") + " 13px " + FONT, outline: "none", textAlign: "left",
     };
   }
-  var closeBtnStyle = {
-    border: "none", background: "transparent", fontSize: "16px", cursor: "pointer",
-    color: "#94a3b8", borderRadius: "8px", width: "30px", height: "30px", flexShrink: "0",
-    lineHeight: "1",
-  };
-  function label(t) {
-    return el("div", { style: { margin: "14px 0 6px", fontWeight: "600", color: "#334155", fontSize: "13px" } }, [t]);
+  function closeBtnStyle(pal) {
+    return {
+      border: "none", background: "transparent", fontSize: "16px", cursor: "pointer",
+      color: pal.muted, borderRadius: "8px", width: "30px", height: "30px", flexShrink: "0",
+      lineHeight: "1",
+    };
   }
-  function footer() {
+  function label(t, pal) {
+    return el("div", { style: { margin: "14px 0 6px", fontWeight: "600", color: pal.label, fontSize: "13px" } }, [t]);
+  }
+  function footer(pal) {
     return el("div", { style: {
-      marginTop: "16px", paddingTop: "12px", borderTop: "1px solid #f1f5f9",
-      textAlign: "center", color: "#94a3b8", font: "12px " + FONT,
+      marginTop: "16px", paddingTop: "12px", borderTop: "1px solid " + pal.footerBorder,
+      textAlign: "center", color: pal.muted, font: "12px " + FONT,
     } }, ["Powered by 🍠 jicama"]);
   }
   // hex (#rrggbb) -> rgba string with alpha, for soft tints/shadows from the theme color.

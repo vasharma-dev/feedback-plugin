@@ -202,8 +202,19 @@ function Editor({ apiKey, project }: { apiKey: string; project: Project }) {
   );
 }
 
+// Same brightness test the widget uses, so the preview matches the real auto light/dark text.
+function previewPalette(bg: string) {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(bg || "");
+  const r = m ? parseInt(m[1], 16) : 255, g = m ? parseInt(m[2], 16) : 255, b = m ? parseInt(m[3], 16) : 255;
+  const dark = 0.299 * r + 0.587 * g + 0.114 * b < 140;
+  return dark
+    ? { text: "#f1f5f9", muted: "#94a3b8", chipBorder: "rgba(255,255,255,.18)", chipText: "#cbd5e1", inputBg: "rgba(255,255,255,.06)" }
+    : { text: "#0f172a", muted: "#64748b", chipBorder: "#e2e8f0", chipText: "#334155", inputBg: "#f8fafc" };
+}
+
 function Preview({ theme }: { theme: WidgetTheme }) {
   const [open, setOpen] = useState(true);
+  const pal = previewPalette(theme.dialogBg);
   return (
     <div className="relative rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-slate-100 overflow-hidden shadow-card" style={{ height: 420 }}>
       {/* fake site chrome */}
@@ -244,8 +255,8 @@ function Preview({ theme }: { theme: WidgetTheme }) {
             ["--c" as string]: theme.color,
           }}
         >
-          <div className="text-[15px] font-bold text-slate-900 leading-tight">{theme.headerTitle || "Share your feedback"}</div>
-          <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">{theme.headerSubtitle || "We read every message."}</div>
+          <div className="text-[15px] font-bold leading-tight" style={{ color: pal.text }}>{theme.headerTitle || "Share your feedback"}</div>
+          <div className="text-[11px] mt-0.5 leading-snug" style={{ color: pal.muted }}>{theme.headerSubtitle || "We read every message."}</div>
           <div className="grid grid-cols-2 gap-1.5 mt-3">
             {["🐞 Bug", "💡 Idea", "❤️ Praise", "❓ Question"].map((t, i) => (
               <div
@@ -253,19 +264,19 @@ function Preview({ theme }: { theme: WidgetTheme }) {
                 className="text-[11px] rounded-lg border px-2 py-1.5"
                 style={
                   i === 0
-                    ? { borderColor: theme.color, color: theme.color, background: theme.color + "14", fontWeight: 600 }
-                    : { borderColor: "#e2e8f0", color: "#334155" }
+                    ? { borderColor: theme.color, color: theme.color, background: theme.color + "22", fontWeight: 600 }
+                    : { borderColor: pal.chipBorder, color: pal.chipText }
                 }
               >
                 {t}
               </div>
             ))}
           </div>
-          <div className="mt-2 h-12 rounded-lg border border-slate-200 bg-slate-50" />
+          <div className="mt-2 h-12 rounded-lg border" style={{ borderColor: pal.chipBorder, background: pal.inputBg }} />
           <div className="mt-2 text-white text-center text-xs font-semibold rounded-lg py-2" style={{ background: theme.color }}>
             Send feedback
           </div>
-          {!theme.hideBranding && <div className="mt-2 text-center text-[10px] text-slate-400">Powered by 🍠 jicama</div>}
+          {!theme.hideBranding && <div className="mt-2 text-center text-[10px]" style={{ color: pal.muted }}>Powered by 🍠 jicama</div>}
         </div>
       )}
     </div>
