@@ -135,6 +135,10 @@ async function main() {
   });
   ok("admin patch of unknown id (404)", ghost.status === 404, `got ${ghost.status}`);
 
+  // --- dashboard can view the org's own API keys (public + secret) ---
+  const apiKeys = await (await fetch(`${BASE}/v1/admin/keys`, { headers: j(SECRET) })).json();
+  ok("dashboard exposes the org's API keys", apiKeys.publicKey === PUBLIC && apiKeys.secretKey === SECRET);
+
   // --- attachments round-trip through the storage layer (inline by default) ---
   const PNG =
     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";

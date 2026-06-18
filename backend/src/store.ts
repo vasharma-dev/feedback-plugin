@@ -176,16 +176,15 @@ function toFeedback(r: FeedbackRow): Feedback {
   };
 }
 
-// API keys are looked up by a SHA-256 hash, so the raw secret is never stored. (These are
-// high-entropy random tokens, not passwords, so a fast hash is the right tool — not bcrypt.)
+// Keys are looked up by a SHA-256 hash (constant-time, indexed). The plaintext is also kept so
+// the owner can view their keys in the dashboard anytime — the expected "test-mode keys" UX
+// (like Stripe's test keys). For a hardened live mode you'd show the secret once + offer rotate.
 export function hashKey(key: string): string {
   return crypto.createHash("sha256").update(key).digest("hex");
 }
 
-// Build the DB columns for a new key: secrets are hash-only; public keys also keep plaintext
-// (they ship inside the customer's HTML anyway, and the dashboard shows them for the embed).
-function keyColumns(plaintext: string, kind: "public" | "secret") {
-  return { keyHash: hashKey(plaintext), key: kind === "public" ? plaintext : null };
+function keyColumns(plaintext: string, _kind: "public" | "secret") {
+  return { keyHash: hashKey(plaintext), key: plaintext };
 }
 
 // ---- Auth lookups ----
@@ -849,17 +848,14 @@ export async function deleteSession(token: string | undefined): Promise<void> {
   await prisma.session.deleteMany({ where: { id: token } });
 }
 
-/**
- * The tenant's PUBLIC key, for showing the embed snippet. The secret key is hash-only and can't
- * be retrieved — it's returned exactly once at signup/onboarding, never again.
- */
+/** The tenant's keys for the dashboard — public (for the widget) and secret (for the REST API). */
 export async function getTenantKeys(
   tenantId: string
-): Promise<{ publicKey: string | null; secretKey: null }> {
+): Promise<{ publicKey: string | null; secretKey: string | null }> {
   const keys = await prisma.apiKey.findMany({ where: { tenantId } });
   return {
     publicKey: keys.find((k) => k.kind === "public")?.key ?? null,
-    secretKey: null,
+    secretKey: keys.find((k) => k.kind === "secret")?.key ?? null,
   };
 }
 
@@ -1117,14 +1113,15 @@ export async function ensureSeed() {
     data: { tokenBalance: 100_000 },
   });
 
-  // One-time migration: hash any legacy plaintext keys, and drop the plaintext of secret keys.
+  // One-time migration: backfill the hash for any legacy plaintext keys (keeps plaintext).
   const legacy = await prisma.apiKey.findMany({ where: { keyHash: null } });
   for (const k of legacy) {
     if (!k.key) continue;
-    await prisma.apiKey.update({
-      where: { id: k.id },
-      data: { keyHash: hashKey(k.key), key: k.kind === "public" ? k.key : null },
-    });
+    await prisma.apiKey.update({ where: { id: k.id }, data: { keyHash: hashKey(k.key) } });
+  }
+  // Restore the seeded demo secret keys' plaintext (a prior build stored secrets hash-only).
+  for (const sec of [DEMO.secretKey, DEMO2.secretKey]) {
+    await prisma.apiKey.updateMany({ where: { keyHash: hashKey(sec), key: null }, data: { key: sec } });
   }
 
   // Seed token packs from the code defaults (only inserts missing ones — never overwrites

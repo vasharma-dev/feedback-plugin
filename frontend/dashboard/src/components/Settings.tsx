@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { getProjects, patchProjectOrigins } from "../api";
+import { getKeys, getProjects, patchProjectOrigins, type TenantKeys } from "../api";
 import type { Project } from "../types";
 import { CheckIcon } from "./icons";
 
@@ -33,9 +33,7 @@ export default function Settings({ apiKey }: { apiKey: string }) {
 
   return (
     <div className="space-y-5">
-      {projects.map((p) => (
-        <ApiKeyCard key={`k-${p.id}`} project={p} />
-      ))}
+      <ApiKeyCard apiKey={apiKey} project={projects[0]} />
 
       <div className="bg-brand-50 border border-brand-100 rounded-2xl px-5 py-4 text-sm text-slate-600">
         <span className="font-semibold text-brand-700">Allowed origins</span> lock a project's{" "}
@@ -50,13 +48,21 @@ export default function Settings({ apiKey }: { apiKey: string }) {
   );
 }
 
-function ApiKeyCard({ project }: { project: Project }) {
-  const [copied, setCopied] = useState<"key" | "snippet" | null>(null);
-  const pk = project.publicKey || "pk_…";
+function ApiKeyCard({ apiKey, project }: { apiKey: string; project: Project }) {
+  const [keys, setKeys] = useState<TenantKeys | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [showSecret, setShowSecret] = useState(false);
+
+  useEffect(() => {
+    getKeys(apiKey).then(setKeys).catch(() => setKeys(null));
+  }, [apiKey]);
+
+  const pk = keys?.publicKey || project.publicKey || "pk_…";
+  const sk = keys?.secretKey || null;
   const origin = typeof window !== "undefined" ? window.location.origin : "https://your-backend";
   const snippet = `<script src="${origin}/frontend/widget/feedback.js"\n        data-key="${pk}"\n        data-api="${origin}"></script>`;
 
-  async function copy(text: string, which: "key" | "snippet") {
+  async function copy(text: string, which: string) {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(which);
@@ -66,36 +72,55 @@ function ApiKeyCard({ project }: { project: Project }) {
     }
   }
 
+  const keyRow = "flex-1 font-mono text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 truncate";
+  const copyBtn = "shrink-0 inline-flex items-center text-sm font-medium text-brand-700 border border-slate-200 hover:border-slate-300 rounded-xl px-3 py-2.5 transition";
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200/70 shadow-card p-5">
-      <div className="font-semibold text-slate-900">Your API key</div>
-      <p className="text-sm text-slate-500 mt-0.5">
-        This is your <span className="font-medium">public</span> key — put it in your site's widget. It's safe to expose.
-      </p>
+      <div className="font-semibold text-slate-900">Your API keys</div>
+      <p className="text-sm text-slate-500 mt-0.5">Use these to authenticate the widget and the REST API.</p>
 
-      <div className="mt-3 flex items-center gap-2">
-        <code className="flex-1 font-mono text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 truncate">
-          {pk}
-        </code>
-        <button
-          onClick={() => copy(pk, "key")}
-          className="shrink-0 inline-flex items-center gap-1.5 text-sm font-medium text-brand-700 border border-slate-200 hover:border-slate-300 rounded-xl px-3 py-2.5 transition"
-        >
-          {copied === "key" ? "Copied!" : "Copy"}
-        </button>
+      {/* public key */}
+      <div className="mt-4">
+        <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+          Public key
+          <span className="normal-case font-normal text-slate-400">— for the widget / SDK (safe to expose)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <code className={keyRow}>{pk}</code>
+          <button onClick={() => copy(pk, "pk")} className={copyBtn}>{copied === "pk" ? "Copied!" : "Copy"}</button>
+        </div>
       </div>
 
-      <div className="mt-4 flex items-center justify-between">
+      {/* secret key */}
+      <div className="mt-4">
+        <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+          Secret key
+          <span className="normal-case font-normal text-slate-400">— for the REST admin API (keep private)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <code className={keyRow}>
+            {sk ? (showSecret ? sk : `${sk.slice(0, 6)}${"•".repeat(Math.max(0, sk.length - 6))}`) : "—"}
+          </code>
+          {sk && (
+            <button onClick={() => setShowSecret((v) => !v)} className={copyBtn}>
+              {showSecret ? "Hide" : "Reveal"}
+            </button>
+          )}
+          {sk && (
+            <button onClick={() => copy(sk, "sk")} className={copyBtn}>{copied === "sk" ? "Copied!" : "Copy"}</button>
+          )}
+        </div>
+      </div>
+
+      {/* embed snippet */}
+      <div className="mt-5 flex items-center justify-between">
         <div className="text-sm font-medium text-slate-700">Embed snippet</div>
-        <button onClick={() => copy(snippet, "snippet")} className="text-xs font-medium text-brand-700 hover:text-brand-800">
-          {copied === "snippet" ? "Copied!" : "Copy"}
+        <button onClick={() => copy(snippet, "snip")} className="text-xs font-medium text-brand-700 hover:text-brand-800">
+          {copied === "snip" ? "Copied!" : "Copy"}
         </button>
       </div>
       <pre className="mt-1.5 text-xs bg-slate-900 text-slate-100 rounded-xl p-3 overflow-x-auto whitespace-pre">{snippet}</pre>
-
-      <p className="text-xs text-slate-400 mt-2">
-        Your <span className="font-medium">secret</span> key (for the REST admin API) was shown once at sign-up — you sign in here with Google, so you won't need it for the dashboard.
-      </p>
     </div>
   );
 }

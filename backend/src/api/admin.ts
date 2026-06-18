@@ -5,6 +5,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { resolveTenant } from "../middleware/auth.js";
 import {
+  getTenantKeys,
   listProjectsWithKeys,
   queryFeedback,
   statsFor,
@@ -21,6 +22,15 @@ adminRouter.use(resolveTenant);
 adminRouter.get("/projects", async (req, res, next) => {
   try {
     res.json({ projects: await listProjectsWithKeys(req.tenantId!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /v1/admin/keys — the org's own API keys, for the dashboard to display.
+adminRouter.get("/keys", async (req, res, next) => {
+  try {
+    res.json(await getTenantKeys(req.tenantId!));
   } catch (err) {
     next(err);
   }

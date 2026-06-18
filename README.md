@@ -125,7 +125,7 @@ cd backend
 npm run smoke
 ```
 
-It runs 78 checks across the whole system (in the zero-setup fallback mode) — ingest, auth/trust separation, validation, spam
+It runs 79 checks across the whole system (in the zero-setup fallback mode) — ingest, auth/trust separation, validation, spam
 honeypot, admin stats/list/filter/patch, **signup, simulated payments (incl. declined cards),
 token balance + spend-per-feedback + buying token packs, multi-tenant isolation, per-project
 origin lock-down, widget theming/branding, simulated Google login → onboarding → session-based
@@ -133,7 +133,7 @@ dashboard**, and that the widget + signup + React dashboard are served — print
 and exiting non-zero on any failure. Expected:
 
 ```
-✅ ALL PASS — 78 passed, 0 failed
+✅ ALL PASS — 79 passed, 0 failed
 ```
 
 ## The three integration surfaces (DESIGN.md §2)
@@ -203,7 +203,7 @@ omitted — across projects/origins you must set it.)
 (or deep-link `…/dashboard/?key=sk_…`). You'll see **only** your org's submissions, live.
 
 > **Status: fully working locally; the main production-hardening items are now built in.**
-> **API keys are hashed** (secrets stored as SHA-256, never plaintext), **attachment storage** is
+> **API keys** are indexed by a SHA-256 hash for constant-time lookup, **attachment storage** is
 > pluggable (inline → filesystem → S3/R2), the **rate limiter** is behind a swappable store
 > (in-memory → Redis), and **origin allow-lists**, **real Google OAuth**, and **real Stripe
 > Checkout** are all available (see below). What's left for a real deployment is mostly ops:
@@ -253,14 +253,13 @@ services, so the zero-setup prototype keeps working:
 
 | Concern | Prototype default | Production switch |
 |---|---|---|
-| **API key storage** | — *(always on)* | Secrets are stored as **SHA-256 hashes** (`keyHash`), never plaintext. The raw secret is shown **once** at signup/onboarding. Public keys keep plaintext (they ship in the customer's HTML). Lookups hash the incoming key. (`backend/src/store.ts` `hashKey`) |
+| **API key storage** | keys are **viewable in the dashboard** (Settings → Your API keys) for easy integration — the "test-mode keys" UX | Keys are indexed by a **SHA-256 hash** (`keyHash`) for constant-time lookup. For a hardened **live** mode, store the secret encrypted (or show it once + offer **rotate**) instead of plaintext. (`backend/src/store.ts` `hashKey`/`getTenantKeys`) |
 | **Attachments** | `inline` data-URLs in the DB | Set `STORAGE=filesystem` to write blobs to `./uploads` and store a `/uploads/…` URL instead. Adding S3/R2 is one `put()` branch in `backend/src/storage.ts` — nothing upstream changes. |
 | **Rate limiter** | in-memory store | Implement the `RedisStore` in `backend/src/middleware/rateLimit.ts` and set `REDIS_URL` for multi-instance counting. The middleware is already store-agnostic. |
 | **Database** | SQLite (`dev.db`) | Set `provider = "postgresql"` in `prisma/schema.prisma`, point `DATABASE_URL` at Postgres, `npx prisma db push`. All DB access is behind `store.ts`; the rest of the app is unchanged. (On Postgres you'd also switch the JSON-encoded `String` columns to native `Json`/enums.) |
 
-> Existing keys in a pre-hardening `dev.db` are migrated automatically on boot (hashed, and the
-> plaintext of secrets is dropped). The 66-check smoke test covers hashed-key auth and an
-> attachment round-trip.
+> Existing keys in an older `dev.db` get their hash backfilled automatically on boot. The smoke
+> test covers key-authed access, the dashboard keys endpoint, and an attachment round-trip.
 
 ## API summary
 
@@ -302,7 +301,7 @@ frontend/
 
 - ✅ ~~Replace the in-memory store with Prisma~~ — done (SQLite now; flip provider for Postgres).
 - ✅ ~~Build the dashboard as the planned React + Vite app~~ — done (`frontend/dashboard`).
-- ✅ ~~Hash API keys~~ — done (SHA-256 hash-only secrets; see [Production hardening](#production-hardening)).
+- ✅ ~~Hash-index API keys~~ — done (SHA-256 lookup; keys viewable in the dashboard, see [Production hardening](#production-hardening)).
 - ✅ ~~Move attachments off inline data-URLs~~ — pluggable storage (`STORAGE=filesystem`; S3/R2 is one `put()` branch).
 - ✅ ~~Real accounts + billing~~ — Google login (mock + real OAuth), tokens, Stripe Checkout.
 - ✅ ~~Per-project origin allow-lists & widget theming~~ — done (Settings + Widget tabs).

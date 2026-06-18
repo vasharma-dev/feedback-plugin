@@ -64,6 +64,16 @@ export function patchStatus(key: string, id: string, status: FeedbackStatus): Pr
   }).then(json<Feedback>);
 }
 
+// ---- Keys ----
+export interface TenantKeys {
+  publicKey: string | null;
+  secretKey: string | null;
+}
+
+export function getKeys(key: string): Promise<TenantKeys> {
+  return api("/v1/admin/keys", key).then(json<TenantKeys>);
+}
+
 // ---- Projects ----
 export function getProjects(key: string): Promise<Project[]> {
   return api("/v1/admin/projects", key)
