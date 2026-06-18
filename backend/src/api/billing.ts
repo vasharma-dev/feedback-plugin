@@ -14,8 +14,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import { createCheckoutSession, retrieveCheckoutSession } from "../billing/stripe.js";
-import { APP_URL, isStripeConfigured } from "../config.js";
+import { APP_URL } from "../config.js";
 import { resolveTenant } from "../middleware/auth.js";
+import { isStripeConfigured } from "../settings.js";
 import { formatPackPrice, formatPrice, getPlan, isPackId, isPlanId, PLANS } from "../plans.js";
 import {
   BillingError,

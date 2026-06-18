@@ -441,6 +441,15 @@ async function main() {
   ok("super admin sees all orgs with feedback counts",
     Array.isArray(saOrgs.orgs) && saOrgs.orgs.length >= 2 && typeof saOrgs.orgs[0].feedbackCount === "number");
 
+  // Platform settings (Stripe / payments).
+  ok("super admin settings require auth (401)", (await fetch(`${BASE}/v1/superadmin/settings`)).status === 401);
+  const saSettings = await (await fetch(`${BASE}/v1/superadmin/settings`, { headers: saH })).json();
+  ok("super admin reads platform settings", typeof saSettings.stripeConfigured === "boolean");
+  const saBadKey = await fetch(`${BASE}/v1/superadmin/settings`, {
+    method: "PATCH", headers: { ...saH, "Content-Type": "application/json" }, body: JSON.stringify({ stripeSecretKey: "not-a-key" }),
+  });
+  ok("super admin rejects an invalid Stripe key (422)", saBadKey.status === 422, `got ${saBadKey.status}`);
+
   ok("landing page served at / (200)", (await fetch(`${BASE}/`)).status === 200);
   ok("login page served at /login (200)", (await fetch(`${BASE}/login`)).status === 200);
   ok("super admin panel served at /admin (200)", (await fetch(`${BASE}/admin`)).status === 200);

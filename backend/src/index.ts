@@ -9,6 +9,7 @@ import { billingRouter, publicBillingRouter } from "./api/billing.js";
 import { ingestRouter } from "./api/ingest.js";
 import { superAdminRouter } from "./api/superadmin.js";
 import { superAdmin as superAdminCfg } from "./config.js";
+import { loadSettings } from "./settings.js";
 import { UPLOADS_DIR } from "./storage.js";
 import { DEMO, DEMO2, ensureSeed } from "./store.js";
 
@@ -98,6 +99,7 @@ app.use(
 
 // Seed the demo tenant (idempotent) before accepting traffic, then listen.
 await ensureSeed();
+await loadSettings(); // load the Stripe key (and any runtime settings) into cache
 app.listen(PORT, () => {
   /* eslint-disable no-console */
   console.log(`\n  jicama feedback backend  →  http://localhost:${PORT}`);

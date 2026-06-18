@@ -17,13 +17,11 @@ export function isGoogleConfigured(): boolean {
   return Boolean(google.clientId && google.clientSecret);
 }
 
+// Env-provided Stripe key (a fallback). The live value is read from settings.ts, which lets the
+// Super Admin set it from the panel at runtime.
 export const stripe = {
   secretKey: process.env.STRIPE_SECRET_KEY || "",
 };
-
-export function isStripeConfigured(): boolean {
-  return Boolean(stripe.secretKey);
-}
 
 // Super Admin (platform owner) seed credentials. Override in .env for anything real.
 export const superAdmin = {

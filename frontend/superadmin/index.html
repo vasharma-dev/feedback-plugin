@@ -10,7 +10,6 @@
     :root { --brand:#6C2BD9; --brand-700:#5A1FB8; --ink:#0f172a; --muted:#64748b; --line:#eef2f7; }
     * { box-sizing:border-box; }
     body { margin:0; font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--ink); background:#0b1020; -webkit-font-smoothing:antialiased; }
-    a { color:var(--brand); text-decoration:none; }
     .wrap { max-width:980px; margin:0 auto; padding:0 22px; }
 
     /* login */
@@ -34,9 +33,14 @@
     .topbar .wrap { display:flex; align-items:center; gap:12px; height:60px; color:#e2e8f0; }
     .topbar .brand { display:flex; align-items:center; gap:10px; font-weight:700; }
     .topbar .who { margin-left:auto; color:#94a3b8; font-size:13px; }
-    main { padding:26px 0 60px; }
-    h2 { color:#e2e8f0; font-size:14px; text-transform:uppercase; letter-spacing:.04em; margin:26px 0 12px; }
+    .tabs { display:flex; gap:4px; margin:22px 0 0; }
+    .tab { background:transparent; border:none; color:#94a3b8; font:600 14px Inter; padding:10px 16px; border-radius:10px 10px 0 0; cursor:pointer; }
+    .tab.active { color:#fff; background:#111a2e; }
+    main { padding:0 0 60px; }
+    .card-wrap { background:#0b1020; padding:22px 0; }
+    h2 { color:#e2e8f0; font-size:14px; text-transform:uppercase; letter-spacing:.04em; margin:24px 0 12px; }
     .panel { background:#fff; border-radius:16px; padding:6px; }
+    .panel.pad { padding:20px; }
     .pack { display:grid; grid-template-columns:1.2fr .8fr .8fr 2fr auto auto; gap:12px; align-items:end; padding:16px; border-bottom:1px solid var(--line); }
     .pack:last-child { border-bottom:none; }
     .pack .f label { font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:#94a3b8; margin:0 0 4px; }
@@ -49,6 +53,15 @@
     tbody tr { border-top:1px solid var(--line); }
     .tag { font-size:12px; font-weight:600; padding:2px 9px; border-radius:999px; background:#f1f5f9; color:#475569; text-transform:capitalize; }
     .mono { font-variant-numeric:tabular-nums; }
+
+    /* stripe card */
+    .stripe-status { display:inline-flex; align-items:center; gap:7px; font-size:13px; font-weight:600; padding:4px 12px; border-radius:999px; }
+    .stripe-status.on { background:#dcfce7; color:#166534; } .stripe-status.off { background:#f1f5f9; color:#64748b; }
+    .dot { width:8px; height:8px; border-radius:999px; background:currentColor; }
+    .stripe-row { display:flex; gap:10px; align-items:center; margin-top:14px; }
+    .stripe-row input { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; }
+    .help { color:#64748b; font-size:13px; margin:6px 0 0; line-height:1.5; }
+    .help a { color:var(--brand); }
     @media (max-width:760px){ .pack{grid-template-columns:1fr 1fr; } }
   </style>
 </head>
@@ -58,7 +71,7 @@
     <form class="login" id="loginForm">
       <div class="logo">🛡️</div>
       <h1>Super Admin</h1>
-      <p class="sub">Platform owner access — pricing & organizations.</p>
+      <p class="sub">Platform owner access — payments, plans & clients.</p>
       <label for="email">Email</label>
       <input id="email" type="email" autocomplete="username" placeholder="super@jicama.tech" />
       <label for="password">Password</label>
@@ -76,30 +89,57 @@
       <span class="who" id="who"></span>
       <button class="btn btn-ghost btn-sm" id="logoutBtn" style="margin-left:14px">Sign out</button>
     </div></div>
-    <main class="wrap">
-      <h2>Token pack pricing</h2>
-      <div id="packs" class="panel"></div>
 
-      <h2>Organizations</h2>
-      <table>
-        <thead><tr><th>Organization</th><th>Plan</th><th>Tokens</th><th>Feedback</th><th>Billing email</th></tr></thead>
-        <tbody id="orgs"></tbody>
-      </table>
-    </main>
+    <div class="wrap">
+      <div class="tabs">
+        <button class="tab active" data-tab="plans">Plans &amp; payments</button>
+        <button class="tab" data-tab="clients">Clients</button>
+      </div>
+    </div>
+
+    <div class="card-wrap"><main class="wrap">
+      <!-- PLANS TAB -->
+      <section id="tab-plans">
+        <h2>Stripe / payments</h2>
+        <div class="panel pad">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <div style="font-weight:600">Accept real payments via Stripe</div>
+            <span id="stripeStatus" class="stripe-status off"><span class="dot"></span> Not connected</span>
+          </div>
+          <p class="help">Paste your Stripe <b>Secret key</b> to take real payments for token purchases.
+            Get it from your <a href="https://dashboard.stripe.com/apikeys" target="_blank" rel="noreferrer">Stripe dashboard → API keys</a>
+            (use <code>sk_test_…</code> while testing). When set, the Buy buttons redirect to Stripe Checkout.</p>
+          <div class="stripe-row">
+            <input id="stripeKey" placeholder="sk_test_… or sk_live_…" autocomplete="off" />
+            <button class="btn btn-sm" id="saveStripe">Save</button>
+            <button class="btn btn-ghost btn-sm" id="clearStripe">Disconnect</button>
+            <span class="saved" id="stripeSaved">✓ Saved</span>
+          </div>
+          <div id="stripeErr" class="err"></div>
+        </div>
+
+        <h2>Token pack pricing</h2>
+        <div id="packs" class="panel"></div>
+      </section>
+
+      <!-- CLIENTS TAB -->
+      <section id="tab-clients" style="display:none">
+        <h2>Organizations using jicama</h2>
+        <table>
+          <thead><tr><th>Organization</th><th>Website</th><th>Plan</th><th>Tokens</th><th>Feedback</th><th>Billing email</th></tr></thead>
+          <tbody id="orgs"></tbody>
+        </table>
+      </section>
+    </main></div>
   </div>
 
   <script>
     var $ = function(id){ return document.getElementById(id); };
-    function money(c){ var d=c/100; return "$"+(Number.isInteger(d)?d:d.toFixed(2)); }
-
-    function showErr(el, msg){ el.textContent="⚠ "+msg; el.style.display="block"; }
+    function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
 
     // --- auth gate ---
     function boot(){
-      fetch("/v1/superadmin/me").then(function(r){
-        if(r.ok) return r.json();
-        return null;
-      }).then(function(me){
+      fetch("/v1/superadmin/me").then(function(r){ return r.ok ? r.json() : null; }).then(function(me){
         if(me){ enterApp(me.email); } else { $("loginScreen").style.display="grid"; }
       }).catch(function(){ $("loginScreen").style.display="grid"; });
     }
@@ -109,27 +149,59 @@
       $("loginErr").style.display="none";
       var btn = this.querySelector("button"); btn.disabled=true;
       try {
-        var r = await fetch("/v1/superadmin/login", {
-          method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({ email:$("email").value.trim(), password:$("password").value })
-        });
+        var r = await fetch("/v1/superadmin/login", { method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({ email:$("email").value.trim(), password:$("password").value }) });
         var b = await r.json();
         if(!r.ok) throw new Error(b.message || b.error || "Login failed");
         enterApp(b.email);
-      } catch(err){ showErr($("loginErr"), err.message); btn.disabled=false; }
+      } catch(err){ $("loginErr").textContent="⚠ "+err.message; $("loginErr").style.display="block"; btn.disabled=false; }
     };
 
     function enterApp(email){
       $("loginScreen").style.display="none";
       $("app").style.display="block";
       $("who").textContent = email;
-      loadPacks(); loadOrgs();
+      loadStripe(); loadPacks(); loadOrgs();
     }
 
-    $("logoutBtn").onclick = async function(){
-      await fetch("/v1/superadmin/logout", { method:"POST" });
-      location.reload();
-    };
+    $("logoutBtn").onclick = async function(){ await fetch("/v1/superadmin/logout", { method:"POST" }); location.reload(); };
+
+    // --- tabs ---
+    document.querySelectorAll(".tab").forEach(function(t){
+      t.onclick = function(){
+        document.querySelectorAll(".tab").forEach(function(x){ x.classList.remove("active"); });
+        t.classList.add("active");
+        var tab = t.getAttribute("data-tab");
+        $("tab-plans").style.display = tab==="plans" ? "block" : "none";
+        $("tab-clients").style.display = tab==="clients" ? "block" : "none";
+      };
+    });
+
+    // --- stripe settings ---
+    function loadStripe(){
+      fetch("/v1/superadmin/settings").then(function(r){return r.json();}).then(function(s){
+        var st = $("stripeStatus");
+        if(s.stripeConfigured){
+          st.className="stripe-status on"; st.innerHTML='<span class="dot"></span> Connected'+(s.stripeMode?(' · '+s.stripeMode+' mode'):'');
+          $("stripeKey").placeholder = s.stripeKeyMasked || "configured";
+        } else {
+          st.className="stripe-status off"; st.innerHTML='<span class="dot"></span> Not connected';
+        }
+      });
+    }
+    async function saveStripeKey(value){
+      $("stripeErr").style.display="none";
+      try {
+        var r = await fetch("/v1/superadmin/settings", { method:"PATCH", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ stripeSecretKey: value }) });
+        var b = await r.json();
+        if(!r.ok) throw new Error(b.message || b.error || "Save failed");
+        $("stripeKey").value="";
+        var sv=$("stripeSaved"); sv.style.display="inline"; setTimeout(function(){ sv.style.display="none"; }, 1800);
+        loadStripe();
+      } catch(e){ $("stripeErr").textContent="⚠ "+e.message; $("stripeErr").style.display="block"; }
+    }
+    $("saveStripe").onclick = function(){ if($("stripeKey").value.trim()) saveStripeKey($("stripeKey").value.trim()); };
+    $("clearStripe").onclick = function(){ if(confirm("Disconnect Stripe? Purchases will fall back to test mode.")) saveStripeKey(""); };
 
     // --- packs editor ---
     function loadPacks(){
@@ -143,52 +215,42 @@
             '<div class="f"><label>Price (USD)</label><input data-k="price" type="number" step="0.01" value="'+(p.priceCents/100)+'"></div>'+
             '<div class="f"><label>Tagline</label><input data-k="tagline" value="'+esc(p.tagline)+'"></div>'+
             '<div class="pop"><input data-k="popular" type="checkbox" '+(p.popular?"checked":"")+'> popular</div>'+
-            '<div style="display:flex;align-items:center;gap:10px;padding-bottom:4px">'+
-              '<button class="btn btn-sm">Save</button><span class="saved">✓ Saved</span></div>';
-          var btn = row.querySelector("button");
-          btn.onclick = function(){ savePack(p.id, row, btn); };
+            '<div style="display:flex;align-items:center;gap:10px;padding-bottom:4px"><button class="btn btn-sm">Save</button><span class="saved">✓ Saved</span></div>';
+          row.querySelector("button").onclick = function(){ savePack(p.id, row, this); };
           host.appendChild(row);
         });
       });
     }
-
     async function savePack(id, row, btn){
       var get = function(k){ return row.querySelector('[data-k="'+k+'"]'); };
-      var body = {
-        name: get("name").value.trim(),
-        tokens: parseInt(get("tokens").value,10),
-        priceCents: Math.round(parseFloat(get("price").value)*100),
-        tagline: get("tagline").value.trim(),
-        popular: get("popular").checked
-      };
+      var body = { name:get("name").value.trim(), tokens:parseInt(get("tokens").value,10),
+        priceCents:Math.round(parseFloat(get("price").value)*100), tagline:get("tagline").value.trim(), popular:get("popular").checked };
       btn.disabled=true;
       try {
         var r = await fetch("/v1/superadmin/packs/"+id, { method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) });
         if(!r.ok) throw new Error("save failed");
-        var saved = row.querySelector(".saved"); saved.style.display="inline"; setTimeout(function(){ saved.style.display="none"; }, 1800);
-      } catch(e){ alert("Couldn't save: "+e.message); }
-      finally { btn.disabled=false; }
+        var saved=row.querySelector(".saved"); saved.style.display="inline"; setTimeout(function(){ saved.style.display="none"; }, 1800);
+      } catch(e){ alert("Couldn't save: "+e.message); } finally { btn.disabled=false; }
     }
 
-    // --- orgs table ---
+    // --- clients ---
     function loadOrgs(){
       fetch("/v1/superadmin/orgs").then(function(r){return r.json();}).then(function(d){
-        var tb = $("orgs"); tb.innerHTML="";
+        var tb=$("orgs"); tb.innerHTML="";
         d.orgs.forEach(function(o){
-          var tr = document.createElement("tr");
+          var tr=document.createElement("tr");
           tr.innerHTML =
             '<td><b>'+esc(o.name)+'</b></td>'+
+            '<td style="color:#64748b">'+(o.website?('<a href="'+esc(o.website)+'" target="_blank" rel="noreferrer">'+esc(o.website)+'</a>'):'—')+'</td>'+
             '<td><span class="tag">'+esc(o.plan)+'</span></td>'+
             '<td class="mono">'+o.tokenBalance.toLocaleString()+'</td>'+
             '<td class="mono">'+o.feedbackCount+'</td>'+
             '<td style="color:#64748b">'+esc(o.billingEmail||"—")+'</td>';
           tb.appendChild(tr);
         });
-        if(d.orgs.length===0) tb.innerHTML = '<tr><td colspan="5" style="color:#94a3b8;text-align:center;padding:24px">No organizations yet.</td></tr>';
+        if(d.orgs.length===0) tb.innerHTML = '<tr><td colspan="6" style="color:#94a3b8;text-align:center;padding:24px">No organizations yet.</td></tr>';
       });
     }
-
-    function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
 
     boot();
   </script>

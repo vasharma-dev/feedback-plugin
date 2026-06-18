@@ -177,3 +177,10 @@ model SuperAdminSession {
   createdAt    DateTime @default(now())
   expiresAt    DateTime
 }
+
+// Platform-wide settings the Super Admin edits at runtime (e.g. the Stripe secret key), so
+// payments can be configured from the panel instead of only an env var. Simple key/value.
+model Setting {
+  key   String @id
+  value String
+}

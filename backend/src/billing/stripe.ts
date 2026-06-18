@@ -1,14 +1,14 @@
 // Real Stripe Checkout (hosted payment page), implemented with plain fetch — no SDK.
 // Only used when STRIPE_SECRET_KEY is set; otherwise buying tokens uses the simulated charge.
 
-import { stripe } from "../config.js";
 import type { TokenPack } from "../plans.js";
+import { getStripeSecretKey } from "../settings.js";
 
 const STRIPE_API = "https://api.stripe.com/v1";
 
 function authHeader(): string {
-  // Stripe accepts the secret key as a Bearer token.
-  return `Bearer ${stripe.secretKey}`;
+  // Stripe accepts the secret key as a Bearer token. Sourced from the Super Admin panel (or env).
+  return `Bearer ${getStripeSecretKey()}`;
 }
 
 export interface CheckoutSession {
