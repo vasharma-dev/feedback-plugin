@@ -14,6 +14,17 @@ const DEFAULTS: WidgetTheme = {
   hideBranding: false,
 };
 
+// One-click looks — each sets the two color knobs (accent + dialog background); your text,
+// icon and position are left untouched. Auto-contrast keeps everything readable.
+const PRESETS: Array<{ name: string; color: string; dialogBg: string }> = [
+  { name: "Jicama", color: "#6C2BD9", dialogBg: "#ffffff" },
+  { name: "Midnight", color: "#8B5CF6", dialogBg: "#0f172a" },
+  { name: "Ocean", color: "#0EA5E9", dialogBg: "#ffffff" },
+  { name: "Forest", color: "#16A34A", dialogBg: "#ffffff" },
+  { name: "Sunset", color: "#F97316", dialogBg: "#fff7ed" },
+  { name: "Mono", color: "#111827", dialogBg: "#ffffff" },
+];
+
 export default function Widget({ apiKey }: { apiKey: string }) {
   const [project, setProject] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +61,14 @@ function Editor({ apiKey, project }: { apiKey: string; project: Project }) {
     setTheme((t) => ({ ...t, [k]: v }));
     setSaved(false);
   };
+
+  const applyPreset = (p: { color: string; dialogBg: string }) => {
+    setTheme((t) => ({ ...t, color: p.color, dialogBg: p.dialogBg }));
+    setSaved(false);
+  };
+  const presetActive = (p: { color: string; dialogBg: string }) =>
+    theme.color.toLowerCase() === p.color.toLowerCase() &&
+    theme.dialogBg.toLowerCase() === p.dialogBg.toLowerCase();
 
   const snippet = useMemo(() => {
     const origin = window.location.origin;
@@ -91,6 +110,33 @@ function Editor({ apiKey, project }: { apiKey: string; project: Project }) {
       <div className="space-y-5">
         <div className="bg-white rounded-2xl border border-slate-200/70 shadow-card p-5 space-y-4">
           <div className="font-semibold text-slate-900">Branding</div>
+
+          <div>
+            <label className={label}>Presets</label>
+            <div className="flex flex-wrap gap-2">
+              {PRESETS.map((p) => {
+                const active = presetActive(p);
+                return (
+                  <button
+                    key={p.name}
+                    onClick={() => applyPreset(p)}
+                    title={`${p.name} theme`}
+                    className={`flex items-center gap-2 rounded-xl border pl-1.5 pr-3 py-1.5 text-xs font-medium transition ${
+                      active ? "border-brand-400 ring-2 ring-brand-100 text-slate-800" : "border-slate-200 text-slate-600 hover:border-slate-300"
+                    }`}
+                  >
+                    <span
+                      className="w-6 h-6 rounded-lg grid place-items-center shrink-0 border border-black/5"
+                      style={{ background: p.dialogBg }}
+                    >
+                      <span className="w-3 h-3 rounded-full" style={{ background: p.color }} />
+                    </span>
+                    {p.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
