@@ -7,6 +7,8 @@ import { adminRouter } from "./api/admin.js";
 import { accountRouter, authRouter } from "./api/auth.js";
 import { billingRouter, publicBillingRouter } from "./api/billing.js";
 import { ingestRouter } from "./api/ingest.js";
+import { superAdminRouter } from "./api/superadmin.js";
+import { superAdmin as superAdminCfg } from "./config.js";
 import { UPLOADS_DIR } from "./storage.js";
 import { DEMO, DEMO2, ensureSeed } from "./store.js";
 
@@ -43,6 +45,7 @@ app.use("/v1", publicBillingRouter); // public: GET /v1/plans, POST /v1/signup
 app.use("/v1", ingestRouter); // public, API-key authed ingest
 app.use("/v1/admin", adminRouter); // dashboard / admin
 app.use("/v1/admin/billing", billingRouter); // tenant billing console (secret key)
+app.use("/v1/superadmin", superAdminRouter); // platform owner: pricing + all orgs
 
 // ---- Serve the frontend prototypes from this same process (dev convenience) ----
 // /frontend/widget/feedback.js, /demo, /dashboard, /sdk
@@ -50,9 +53,14 @@ const frontendDir = path.resolve(__dirname, "../../frontend");
 app.use("/frontend", express.static(frontendDir));
 // Attachment files when STORAGE=filesystem (empty/no-op in inline mode).
 app.use("/uploads", express.static(UPLOADS_DIR));
-app.get("/", (_req, res) => res.redirect("/demo"));
+// Product landing page (Get Started → Google sign-in → dashboard).
+app.get("/", (_req, res) => res.sendFile(path.join(frontendDir, "landing", "index.html")));
 app.get("/demo", (_req, res) =>
   res.sendFile(path.join(frontendDir, "widget", "demo.html"))
+);
+// Super Admin (platform owner) — login + pricing/orgs panel.
+app.get("/admin", (_req, res) =>
+  res.sendFile(path.join(frontendDir, "superadmin", "index.html"))
 );
 // Self-serve signup / pricing page (the "buy the plugin" flow).
 app.get("/signup", (_req, res) =>
@@ -99,5 +107,7 @@ app.listen(PORT, () => {
   console.log(`  tenant dashboard         →  http://localhost:${PORT}/dashboard`);
   console.log(`  pricing / signup         →  http://localhost:${PORT}/signup`);
   console.log(`\n  Acme Inc.   (pro)   public ${DEMO.publicKey}   secret ${DEMO.secretKey}`);
-  console.log(`  Globex Corp. (free) public ${DEMO2.publicKey}   secret ${DEMO2.secretKey}\n`);
+  console.log(`  Globex Corp. (free) public ${DEMO2.publicKey}   secret ${DEMO2.secretKey}`);
+  console.log(`\n  Super Admin  →  http://localhost:${PORT}/admin`);
+  console.log(`  login: ${superAdminCfg.email}  /  ${superAdminCfg.password}\n`);
 });

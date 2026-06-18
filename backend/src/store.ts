@@ -7,7 +7,8 @@
 import crypto from "node:crypto";
 import { nanoid } from "nanoid";
 import { prisma } from "./db.js";
-import { getPack, getPlan, starterTokens, type PlanId, type TokenPack } from "./plans.js";
+import { superAdmin as superAdminCfg } from "./config.js";
+import { getPlan, starterTokens, TOKEN_PACKS, type PlanId, type TokenPack } from "./plans.js";
 import { putAttachment } from "./storage.js";
 import type {
   ApiKey,
@@ -510,7 +511,7 @@ export async function buyTokens(
   packId: string,
   newCard?: CardInput
 ): Promise<BuyTokensResult> {
-  const pack = getPack(packId);
+  const pack = await getTokenPack(packId);
   if (!pack) throw new BillingError(404, "pack_not_found", "Unknown token pack.");
   const existing = await prisma.tenant.findUnique({ where: { id: tenantId } });
   if (!existing) throw new BillingError(404, "tenant_not_found");
@@ -557,7 +558,7 @@ export async function creditPurchasedTokens(opts: {
   extId: string;
   amountCents?: number;
 }): Promise<{ credited: boolean; tokenBalance: number }> {
-  const pack = getPack(opts.packId);
+  const pack = await getTokenPack(opts.packId);
   if (!pack) throw new BillingError(404, "pack_not_found");
   const tenant = await prisma.tenant.findUnique({ where: { id: opts.tenantId } });
   if (!tenant) throw new BillingError(404, "tenant_not_found");
@@ -879,6 +880,122 @@ export async function onboardUser(
   return account;
 }
 
+// ====================================================================================
+// Token packs (DB-backed pricing — editable by the Super Admin)
+// ====================================================================================
+type TokenPackRow = {
+  id: string;
+  name: string;
+  tokens: number;
+  priceCents: number;
+  tagline: string;
+  popular: boolean;
+  sortOrder: number;
+};
+
+function toTokenPack(r: TokenPackRow): TokenPack {
+  return { id: r.id as TokenPack["id"], name: r.name, tokens: r.tokens, priceCents: r.priceCents, tagline: r.tagline, popular: r.popular };
+}
+
+export async function listTokenPacks(): Promise<TokenPack[]> {
+  const rows = await prisma.tokenPack.findMany({ orderBy: { sortOrder: "asc" } });
+  return rows.map(toTokenPack);
+}
+
+export async function getTokenPack(id: string): Promise<TokenPack | undefined> {
+  const r = await prisma.tokenPack.findUnique({ where: { id } });
+  return r ? toTokenPack(r) : undefined;
+}
+
+export interface TokenPackUpdate {
+  name?: string;
+  tokens?: number;
+  priceCents?: number;
+  tagline?: string;
+  popular?: boolean;
+}
+
+export async function updateTokenPack(id: string, fields: TokenPackUpdate): Promise<TokenPack | undefined> {
+  const data: Record<string, unknown> = {};
+  if (fields.name !== undefined) data.name = fields.name;
+  if (fields.tokens !== undefined) data.tokens = fields.tokens;
+  if (fields.priceCents !== undefined) data.priceCents = fields.priceCents;
+  if (fields.tagline !== undefined) data.tagline = fields.tagline;
+  if (fields.popular !== undefined) data.popular = fields.popular;
+  const res = await prisma.tokenPack.updateMany({ where: { id }, data });
+  if (res.count === 0) return undefined;
+  return getTokenPack(id);
+}
+
+// ====================================================================================
+// Super Admin (platform owner) — email/password auth + sessions
+// ====================================================================================
+function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password: string, stored: string): boolean {
+  const [salt, hash] = stored.split(":");
+  if (!salt || !hash) return false;
+  const test = crypto.scryptSync(password, salt, 64).toString("hex");
+  const a = Buffer.from(hash, "hex");
+  const b = Buffer.from(test, "hex");
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+export interface SuperAdmin {
+  id: string;
+  email: string;
+}
+
+export async function verifySuperAdmin(email: string, password: string): Promise<SuperAdmin | null> {
+  const sa = await prisma.superAdmin.findUnique({ where: { email: email.trim().toLowerCase() } });
+  if (!sa || !verifyPassword(password, sa.passwordHash)) return null;
+  return { id: sa.id, email: sa.email };
+}
+
+export async function createSuperAdminSession(superAdminId: string): Promise<string> {
+  const token = `sa_${nanoid(32)}`;
+  await prisma.superAdminSession.create({
+    data: { id: token, superAdminId, expiresAt: addDays(new Date(), 7) },
+  });
+  return token;
+}
+
+export async function getSuperAdminBySession(token: string | undefined): Promise<SuperAdmin | null> {
+  if (!token) return null;
+  const s = await prisma.superAdminSession.findUnique({ where: { id: token } });
+  if (!s || s.expiresAt.getTime() <= Date.now()) return null;
+  const sa = await prisma.superAdmin.findUnique({ where: { id: s.superAdminId } });
+  return sa ? { id: sa.id, email: sa.email } : null;
+}
+
+export async function deleteSuperAdminSession(token: string | undefined): Promise<void> {
+  if (!token) return;
+  await prisma.superAdminSession.deleteMany({ where: { id: token } });
+}
+
+/** Every org with the numbers the platform owner cares about. */
+export async function listOrgsOverview() {
+  const tenants = await prisma.tenant.findMany({ orderBy: { createdAt: "desc" } });
+  const out = [];
+  for (const t of tenants) {
+    const feedbackCount = await prisma.feedback.count({ where: { tenantId: t.id } });
+    out.push({
+      id: t.id,
+      name: t.name,
+      plan: t.plan,
+      tokenBalance: t.tokenBalance,
+      billingEmail: t.billingEmail,
+      feedbackCount,
+      createdAt: t.createdAt.toISOString(),
+    });
+  }
+  return out;
+}
+
 // ---- Idempotent seed (runs on boot; safe to call repeatedly) ----
 async function seedTenant(opts: {
   tenantId: string;
@@ -1002,6 +1119,26 @@ export async function ensureSeed() {
     await prisma.apiKey.update({
       where: { id: k.id },
       data: { keyHash: hashKey(k.key), key: k.kind === "public" ? k.key : null },
+    });
+  }
+
+  // Seed token packs from the code defaults (only inserts missing ones — never overwrites
+  // prices the Super Admin has since changed).
+  let order = 0;
+  for (const p of Object.values(TOKEN_PACKS)) {
+    order += 1;
+    const o = order;
+    await prisma.tokenPack.upsert({
+      where: { id: p.id },
+      update: {},
+      create: { id: p.id, name: p.name, tokens: p.tokens, priceCents: p.priceCents, tagline: p.tagline, popular: !!p.popular, sortOrder: o },
+    });
+  }
+
+  // Seed the Super Admin account (idempotent). Credentials come from env or the defaults.
+  if (!(await prisma.superAdmin.findUnique({ where: { email: superAdminCfg.email } }))) {
+    await prisma.superAdmin.create({
+      data: { id: `sa_${nanoid(10)}`, email: superAdminCfg.email, passwordHash: hashPassword(superAdminCfg.password) },
     });
   }
 }

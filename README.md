@@ -36,11 +36,19 @@ Then open:
 
 | URL | What |
 |-----|------|
+| http://localhost:4000/ | **Landing page** — hero + **Get Started** (→ Google sign-in → dashboard), footer **Super Admin** link |
 | http://localhost:4000/demo | A pretend tenant app with the widget embedded (try the 💬 button) |
 | http://localhost:4000/signup | **Pricing + self-serve signup** — pick a plan & pay (test mode), or **Continue with Google** for instant onboarding |
 | http://localhost:4000/auth/google | **Simulated "Sign in with Google"** → onboarding form → personalized dashboard |
 | http://localhost:4000/dashboard | The tenant admin console (React + Vite + Tailwind) — **Feedback inbox**, **Widget** (theming), **Billing**, **Settings** tabs |
+| http://localhost:4000/admin | **Super Admin** (platform owner) — email/password login → edit **token pricing** + view all orgs |
 | http://localhost:4000/health | Health check |
+
+> **Super Admin** is the platform-owner role (you), separate from tenant logins. Default
+> credentials are printed on boot and set via `SUPERADMIN_EMAIL`/`SUPERADMIN_PASSWORD`
+> (defaults `super@jicama.tech` / `jicama-super-2026`). The panel edits **token-pack pricing**
+> (stored in the DB, applied live to every tenant's Billing tab) and lists all organizations with
+> their plan, token balance and feedback count. Password is scrypt-hashed.
 
 > **Sign-in is a simulated Google login** (test mode) — no Google Cloud setup, works offline.
 > Clicking "Sign in with Google" creates a user + an httpOnly session cookie; first-timers complete
@@ -93,7 +101,7 @@ cd backend
 npm run smoke
 ```
 
-It runs 66 checks across the whole system (in the zero-setup fallback mode) — ingest, auth/trust separation, validation, spam
+It runs 77 checks across the whole system (in the zero-setup fallback mode) — ingest, auth/trust separation, validation, spam
 honeypot, admin stats/list/filter/patch, **signup, simulated payments (incl. declined cards),
 token balance + spend-per-feedback + buying token packs, multi-tenant isolation, per-project
 origin lock-down, widget theming/branding, simulated Google login → onboarding → session-based
@@ -101,7 +109,7 @@ dashboard**, and that the widget + signup + React dashboard are served — print
 and exiting non-zero on any failure. Expected:
 
 ```
-✅ ALL PASS — 66 passed, 0 failed
+✅ ALL PASS — 77 passed, 0 failed
 ```
 
 ## The three integration surfaces (DESIGN.md §2)

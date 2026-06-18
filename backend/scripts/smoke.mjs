@@ -402,6 +402,47 @@ async function main() {
   ok("simulated Google sign-in page served (200)", (await fetch(`${BASE}/auth/google`)).status === 200);
   ok("onboarding page served (200)", (await fetch(`${BASE}/onboarding`)).status === 200);
 
+  // ====================================================================================
+  // Super Admin — platform owner (token pricing + all orgs)
+  // ====================================================================================
+  const SA_EMAIL = "super@jicama.tech", SA_PW = "jicama-super-2026";
+
+  ok("super admin rejects a wrong password (401)",
+    (await fetch(`${BASE}/v1/superadmin/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: SA_EMAIL, password: "nope" }) })).status === 401);
+  ok("super admin routes require auth (401)", (await fetch(`${BASE}/v1/superadmin/packs`)).status === 401);
+
+  const saLogin = await fetch(`${BASE}/v1/superadmin/login`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: SA_EMAIL, password: SA_PW }),
+  });
+  const saCookie = (saLogin.headers.get("set-cookie")?.match(/jcm_sa_sess=[^;]+/) || [""])[0];
+  ok("super admin logs in (200)", saLogin.status === 200, `got ${saLogin.status}`);
+  ok("super admin session cookie issued", /^jcm_sa_sess=/.test(saCookie));
+  const saH = { Cookie: saCookie };
+
+  ok("super admin /me works", (await fetch(`${BASE}/v1/superadmin/me`, { headers: saH })).status === 200);
+  const saPacks = await (await fetch(`${BASE}/v1/superadmin/packs`, { headers: saH })).json();
+  ok("super admin lists token packs", Array.isArray(saPacks.packs) && saPacks.packs.length >= 3);
+
+  // Edit the Starter pack price → confirm it flows through to a tenant's billing, then reset.
+  const setPrice = await fetch(`${BASE}/v1/superadmin/packs/starter`, {
+    method: "PATCH", headers: { ...saH, "Content-Type": "application/json" }, body: JSON.stringify({ priceCents: 1234 }),
+  });
+  ok("super admin edits a pack price (200)", setPrice.status === 200, `got ${setPrice.status}`);
+  const tenantBill = await (await fetch(`${BASE}/v1/admin/billing`, { headers: j(freeAcct.secretKey) })).json();
+  const starter = (tenantBill.packs || []).find((p) => p.id === "starter");
+  ok("pricing change is live for tenants", !!starter && starter.priceCents === 1234, `got ${starter && starter.priceCents}`);
+  await fetch(`${BASE}/v1/superadmin/packs/starter`, {
+    method: "PATCH", headers: { ...saH, "Content-Type": "application/json" }, body: JSON.stringify({ priceCents: 900 }),
+  });
+
+  const saOrgs = await (await fetch(`${BASE}/v1/superadmin/orgs`, { headers: saH })).json();
+  ok("super admin sees all orgs with feedback counts",
+    Array.isArray(saOrgs.orgs) && saOrgs.orgs.length >= 2 && typeof saOrgs.orgs[0].feedbackCount === "number");
+
+  ok("landing page served at / (200)", (await fetch(`${BASE}/`)).status === 200);
+  ok("super admin panel served at /admin (200)", (await fetch(`${BASE}/admin`)).status === 200);
+
   // --- signup page served ---
   const signupPage = await fetch(`${BASE}/signup`);
   ok("pricing / signup page served (200)", signupPage.status === 200);

@@ -25,6 +25,12 @@ export function isStripeConfigured(): boolean {
   return Boolean(stripe.secretKey);
 }
 
+// Super Admin (platform owner) seed credentials. Override in .env for anything real.
+export const superAdmin = {
+  email: (process.env.SUPERADMIN_EMAIL || "super@jicama.tech").trim().toLowerCase(),
+  password: process.env.SUPERADMIN_PASSWORD || "jicama-super-2026",
+};
+
 // Attachment storage backend: "inline" keeps the data-URL in the DB row (zero setup);
 // "filesystem" writes the blob to disk and stores a URL (the production shape — swap for S3/R2).
 export type StorageMode = "inline" | "filesystem";

@@ -16,16 +16,7 @@ import { z } from "zod";
 import { createCheckoutSession, retrieveCheckoutSession } from "../billing/stripe.js";
 import { APP_URL, isStripeConfigured } from "../config.js";
 import { resolveTenant } from "../middleware/auth.js";
-import {
-  formatPackPrice,
-  formatPrice,
-  getPack,
-  getPlan,
-  isPackId,
-  isPlanId,
-  PLANS,
-  TOKEN_PACKS,
-} from "../plans.js";
+import { formatPackPrice, formatPrice, getPlan, isPackId, isPlanId, PLANS } from "../plans.js";
 import {
   BillingError,
   buyTokens,
@@ -33,12 +24,14 @@ import {
   createTenantAccount,
   creditPurchasedTokens,
   getBilling,
+  getTokenPack,
   listPayments,
+  listTokenPacks,
 } from "../store.js";
 
-// Flat, display-friendly token packs for the dashboard's "buy tokens" UI.
-const packsView = () =>
-  Object.values(TOKEN_PACKS).map((p) => ({ ...p, priceLabel: formatPackPrice(p.priceCents) }));
+// Flat, display-friendly token packs for the dashboard's "buy tokens" UI (DB-backed pricing).
+const packsView = async () =>
+  (await listTokenPacks()).map((p) => ({ ...p, priceLabel: formatPackPrice(p.priceCents) }));
 
 // ---- public: plan catalogue + signup ----
 export const publicBillingRouter = Router();
@@ -129,7 +122,7 @@ billingRouter.get("/", async (req, res, next) => {
     res.json({
       ...summary,
       tokenBalance: summary.tenant.tokenBalance,
-      packs: packsView(),
+      packs: await packsView(),
       stripeEnabled: isStripeConfigured(), // dashboard picks redirect vs simulated card form
       plan: getPlan(summary.tenant.plan),
       plans: Object.values(PLANS).map((p) => ({ ...p, priceLabel: formatPrice(p.priceCents) })),
@@ -177,7 +170,7 @@ billingRouter.post("/buy-tokens", async (req, res, next) => {
     }
 
     if (isStripeConfigured()) {
-      const pack = getPack(parsed.data.pack)!; // schema guarantees a valid pack id
+      const pack = (await getTokenPack(parsed.data.pack))!; // schema guarantees a valid pack id
       const session = await createCheckoutSession({
         pack,
         tenantId: req.tenantId!,

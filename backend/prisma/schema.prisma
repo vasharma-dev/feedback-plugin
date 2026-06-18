@@ -149,3 +149,30 @@ model Attachment {
   dataUrl    String // prototype inlines as data URL; production stores an S3/R2 URL
   feedback   Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
 }
+
+// Token packs the dashboard offers. Pricing lives in the DB (seeded from defaults) so the
+// platform owner can change it from the Super Admin panel — live for every tenant.
+model TokenPack {
+  id         String  @id // "starter" | "growth" | "scale"
+  name       String
+  tokens     Int
+  priceCents Int
+  tagline    String
+  popular    Boolean @default(false)
+  sortOrder  Int     @default(0)
+}
+
+// The platform owner (you). Separate from tenant Users — logs in with email + password.
+model SuperAdmin {
+  id           String   @id
+  email        String   @unique
+  passwordHash String // scrypt: "salt:hash"
+  createdAt    DateTime @default(now())
+}
+
+model SuperAdminSession {
+  id           String   @id // opaque token (httpOnly cookie)
+  superAdminId String
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+}

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>jicama feedback — collect feedback from your users</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root { --brand:#6C2BD9; --brand-700:#5A1FB8; --ink:#0f172a; --muted:#64748b; --line:#eef2f7; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--ink); background:#fff; -webkit-font-smoothing:antialiased; }
+    a { color:var(--brand); text-decoration:none; }
+    .wrap { max-width:1040px; margin:0 auto; padding:0 24px; }
+    nav { position:sticky; top:0; z-index:10; background:rgba(255,255,255,.85); backdrop-filter:blur(10px); border-bottom:1px solid var(--line); }
+    nav .wrap { display:flex; align-items:center; gap:12px; height:64px; }
+    .brand { display:flex; align-items:center; gap:10px; font-weight:800; font-size:18px; letter-spacing:-.02em; }
+    .logo { width:34px; height:34px; border-radius:10px; background:linear-gradient(135deg,var(--brand),var(--brand-700)); display:grid; place-items:center; font-size:18px; box-shadow:0 4px 12px rgba(108,43,217,.3); }
+    .nav-right { margin-left:auto; display:flex; align-items:center; gap:18px; font-size:14px; color:var(--muted); }
+    .btn { border:none; border-radius:11px; padding:13px 22px; font:600 15px Inter; cursor:pointer; transition:filter .12s, transform .1s; display:inline-flex; align-items:center; gap:10px; }
+    .btn-primary { background:var(--brand); color:#fff; box-shadow:0 6px 18px rgba(108,43,217,.32); }
+    .btn-primary:hover { filter:brightness(1.07); transform:translateY(-1px); }
+    .btn-ghost { background:#fff; color:var(--ink); border:1px solid var(--line); }
+    .btn-ghost:hover { border-color:#cbd5e1; }
+
+    header.hero { text-align:center; padding:84px 0 36px; background:radial-gradient(900px 380px at 50% -120px, rgba(108,43,217,.12), transparent 70%); }
+    .pill { display:inline-flex; align-items:center; gap:8px; background:#f5f0fe; color:var(--brand-700); border:1px solid #e6dafb; border-radius:999px; padding:6px 14px; font-size:13px; font-weight:600; }
+    h1 { font-size:52px; line-height:1.05; letter-spacing:-.03em; margin:22px 0 0; font-weight:800; }
+    h1 .grad { background:linear-gradient(120deg,var(--brand),#9560ef); -webkit-background-clip:text; background-clip:text; color:transparent; }
+    .lead { color:var(--muted); font-size:19px; line-height:1.6; max-width:620px; margin:18px auto 0; }
+    .cta { display:flex; gap:12px; justify-content:center; margin-top:30px; }
+
+    .features { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin:48px 0 8px; }
+    .card { background:#fff; border:1px solid var(--line); border-radius:16px; padding:22px; }
+    .card .ico { width:40px; height:40px; border-radius:11px; background:#f5f0fe; color:var(--brand); display:grid; place-items:center; font-size:20px; margin-bottom:14px; }
+    .card h3 { margin:0 0 6px; font-size:16px; }
+    .card p { margin:0; color:var(--muted); font-size:14px; line-height:1.55; }
+
+    footer { border-top:1px solid var(--line); margin-top:64px; padding:28px 0; color:#94a3b8; font-size:14px; }
+    footer .wrap { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+    footer a { color:#94a3b8; }
+    footer a:hover { color:var(--ink); }
+    .sa { margin-left:auto; }
+
+    @media (max-width:760px){ h1{font-size:36px;} .features{grid-template-columns:1fr;} }
+  </style>
+</head>
+<body>
+  <nav><div class="wrap">
+    <div class="brand"><span class="logo">🍠</span> jicama feedback</div>
+    <div class="nav-right">
+      <a href="/demo">Live demo</a>
+      <button class="btn btn-primary" onclick="location.href='/auth/google'">Get Started</button>
+    </div>
+  </div></nav>
+
+  <header class="hero"><div class="wrap">
+    <span class="pill">💬 Feedback for any app — widget, SDK or REST</span>
+    <h1>Collect feedback your<br /><span class="grad">users actually send</span></h1>
+    <p class="lead">Drop in a widget, get a private dashboard scoped to your organization, and triage
+      every bug, idea and bit of praise in one place. Sign in and you're live in seconds.</p>
+    <div class="cta">
+      <button class="btn btn-primary" onclick="location.href='/auth/google'">
+        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#fff" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C40.9 4.1 36.3 2 31 2 16 2 4 14 4 29s12 27 27 27c14 0 26-10 26-27 0-1.6-.2-3.2-.5-4.7z" opacity=".0"/></svg>
+        Get Started with Google
+      </button>
+      <button class="btn btn-ghost" onclick="location.href='/demo'">See the live demo →</button>
+    </div>
+  </div></header>
+
+  <section class="wrap">
+    <div class="features">
+      <div class="card"><div class="ico">⚡</div><h3>Zero-code widget</h3><p>One script tag and a themed feedback button appears. Brand it from your dashboard — no redeploy.</p></div>
+      <div class="card"><div class="ico">🔒</div><h3>Your data, isolated</h3><p>Every org has its own keys and dashboard. You only ever see your own feedback.</p></div>
+      <div class="card"><div class="ico">🎟️</div><h3>Pay with tokens</h3><p>One token per feedback. Buy packs as you grow — no seats, no surprises.</p></div>
+    </div>
+  </section>
+
+  <footer><div class="wrap">
+    <span>🍠 jicama feedback · prototype</span>
+    <a href="/demo">Demo</a>
+    <a href="/auth/google">Get Started</a>
+    <a class="sa" href="/admin">Super Admin →</a>
+  </div></footer>
+</body>
+</html>
