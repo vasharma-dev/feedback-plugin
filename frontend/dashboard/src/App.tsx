@@ -139,7 +139,7 @@ export default function App() {
 
   async function onLogout() {
     await logout();
-    window.location.href = "/auth/google";
+    window.location.href = "/"; // back to the landing page
   }
 
   return (
