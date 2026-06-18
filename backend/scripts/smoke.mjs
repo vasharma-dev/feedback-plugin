@@ -450,6 +450,17 @@ async function main() {
   const acmeBill = await (await fetch(`${BASE}/v1/admin/billing`, { headers: j(SECRET) })).json();
   ok("plan change is live for the client", acmeBill.plan?.id === "free");
   await planPatch("pro"); // restore
+
+  // A plan upgrade grants that plan's token allotment (free 100 → pro 5,000) without reducing.
+  const grantOrg = await (await fetch(`${BASE}/v1/signup`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ company: "GrantCo", email: "g@grant.test", plan: "free" }),
+  })).json();
+  await fetch(`${BASE}/v1/superadmin/orgs/${grantOrg.tenantId}`, {
+    method: "PATCH", headers: { ...saH, "Content-Type": "application/json" }, body: JSON.stringify({ plan: "pro" }),
+  });
+  const grantBill = await (await fetch(`${BASE}/v1/admin/billing`, { headers: j(grantOrg.secretKey) })).json();
+  ok("upgrading to Pro grants the plan's tokens", grantBill.tokenBalance === 5000, `got ${grantBill.tokenBalance}`);
   ok("super admin rejects an unknown plan (422)", (await planPatch("ultra")).status === 422);
   const ghostOrg = await fetch(`${BASE}/v1/superadmin/orgs/does_not_exist`, {
     method: "PATCH", headers: { ...saH, "Content-Type": "application/json" }, body: JSON.stringify({ plan: "free" }),

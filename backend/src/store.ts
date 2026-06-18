@@ -978,10 +978,20 @@ export async function deleteSuperAdminSession(token: string | undefined): Promis
   await prisma.superAdminSession.deleteMany({ where: { id: token } });
 }
 
-/** Super Admin: move a client to another plan (free/pro/enterprise). No charge. */
-export async function setTenantPlan(tenantId: string, plan: PlanId): Promise<boolean> {
-  const res = await prisma.tenant.updateMany({ where: { id: tenantId }, data: { plan } });
-  return res.count > 0;
+/**
+ * Super Admin: move a client to another plan (free/pro/enterprise) and grant that plan's token
+ * allotment — topping their balance up to the plan level, never reducing tokens they've bought.
+ * No charge. Returns the new balance, or null if the org doesn't exist.
+ */
+export async function setTenantPlan(
+  tenantId: string,
+  plan: PlanId
+): Promise<{ tokenBalance: number } | null> {
+  const t = await prisma.tenant.findUnique({ where: { id: tenantId } });
+  if (!t) return null;
+  const tokenBalance = Math.max(t.tokenBalance, starterTokens(plan));
+  await prisma.tenant.update({ where: { id: tenantId }, data: { plan, tokenBalance } });
+  return { tokenBalance };
 }
 
 /**

@@ -117,9 +117,9 @@ superAdminRouter.patch("/orgs/:id", requireSuperAdmin, async (req, res, next) =>
   try {
     const parsed = orgPlanSchema.safeParse(req.body);
     if (!parsed.success) return res.status(422).json({ error: "validation_error" });
-    const ok = await setTenantPlan(req.params.id, parsed.data.plan as "free" | "pro" | "enterprise");
-    if (!ok) return res.status(404).json({ error: "org_not_found" });
-    res.json({ ok: true, id: req.params.id, plan: parsed.data.plan });
+    const result = await setTenantPlan(req.params.id, parsed.data.plan as "free" | "pro" | "enterprise");
+    if (!result) return res.status(404).json({ error: "org_not_found" });
+    res.json({ ok: true, id: req.params.id, plan: parsed.data.plan, tokenBalance: result.tokenBalance });
   } catch (err) {
     next(err);
   }
