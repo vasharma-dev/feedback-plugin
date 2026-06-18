@@ -202,14 +202,23 @@ function Editor({ apiKey, project }: { apiKey: string; project: Project }) {
   );
 }
 
+function luminance(hex: string) {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || "");
+  if (!m) return 255;
+  return 0.299 * parseInt(m[1], 16) + 0.587 * parseInt(m[2], 16) + 0.114 * parseInt(m[3], 16);
+}
+
 // Same brightness test the widget uses, so the preview matches the real auto light/dark text.
 function previewPalette(bg: string) {
-  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(bg || "");
-  const r = m ? parseInt(m[1], 16) : 255, g = m ? parseInt(m[2], 16) : 255, b = m ? parseInt(m[3], 16) : 255;
-  const dark = 0.299 * r + 0.587 * g + 0.114 * b < 140;
+  const dark = luminance(bg) < 140;
   return dark
     ? { text: "#f1f5f9", muted: "#94a3b8", chipBorder: "rgba(255,255,255,.18)", chipText: "#cbd5e1", inputBg: "rgba(255,255,255,.06)" }
     : { text: "#0f172a", muted: "#64748b", chipBorder: "#e2e8f0", chipText: "#334155", inputBg: "#f8fafc" };
+}
+
+// Readable text to place ON the brand color (white, or near-black for light accents).
+function fgOn(hex: string) {
+  return luminance(hex) > 150 ? "#0f172a" : "#fff";
 }
 
 function Preview({ theme }: { theme: WidgetTheme }) {
@@ -228,9 +237,10 @@ function Preview({ theme }: { theme: WidgetTheme }) {
       {/* launcher button */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="absolute flex items-center gap-2 text-white font-semibold rounded-full shadow-lg"
+        className="absolute flex items-center gap-2 font-semibold rounded-full shadow-lg"
         style={{
           background: theme.color,
+          color: fgOn(theme.color),
           padding: "10px 16px",
           fontSize: 13,
           bottom: 16,
@@ -273,7 +283,7 @@ function Preview({ theme }: { theme: WidgetTheme }) {
             ))}
           </div>
           <div className="mt-2 h-12 rounded-lg border" style={{ borderColor: pal.chipBorder, background: pal.inputBg }} />
-          <div className="mt-2 text-white text-center text-xs font-semibold rounded-lg py-2" style={{ background: theme.color }}>
+          <div className="mt-2 text-center text-xs font-semibold rounded-lg py-2" style={{ background: theme.color, color: fgOn(theme.color) }}>
             Send feedback
           </div>
           {!theme.hideBranding && <div className="mt-2 text-center text-[10px]" style={{ color: pal.muted }}>Powered by 🍠 jicama</div>}

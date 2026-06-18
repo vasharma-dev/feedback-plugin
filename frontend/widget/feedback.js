@@ -133,7 +133,7 @@
         "class": "jcm-launch", "aria-label": "Give feedback",
         style: Object.assign({
           position: "fixed", bottom: "20px", zIndex: 2147483646,
-          background: color, color: "#fff", border: "none", borderRadius: "999px",
+          background: color, color: fgOn(color), border: "none", borderRadius: "999px",
           padding: "12px 18px 12px 16px", font: "600 14px " + FONT, cursor: "pointer",
           boxShadow: "0 6px 20px rgba(0,0,0,.22)", display: "flex", alignItems: "center", gap: "8px",
         }, pos),
@@ -223,7 +223,7 @@
       var submit = el("button", {
         "class": "jcm-submit",
         style: {
-          width: "100%", background: color, color: "#fff", border: "none", borderRadius: "10px",
+          width: "100%", background: color, color: fgOn(color), border: "none", borderRadius: "10px",
           padding: "12px 16px", font: "600 15px " + FONT, cursor: "pointer", marginTop: "14px",
           boxShadow: "0 4px 14px " + hexA(color, 0.35),
         },
@@ -415,6 +415,14 @@
       marginTop: "16px", paddingTop: "12px", borderTop: "1px solid " + pal.footerBorder,
       textAlign: "center", color: pal.muted, font: "12px " + FONT,
     } }, ["Powered by 🍠 jicama"]);
+  }
+  // Readable foreground (white or near-black) to place ON the brand color — so a light accent
+  // (e.g. pale yellow) gets dark text on its buttons instead of unreadable white.
+  function fgOn(hex) {
+    var m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || "");
+    if (!m) return "#fff";
+    var lum = 0.299 * parseInt(m[1], 16) + 0.587 * parseInt(m[2], 16) + 0.114 * parseInt(m[3], 16);
+    return lum > 150 ? "#0f172a" : "#fff";
   }
   // hex (#rrggbb) -> rgba string with alpha, for soft tints/shadows from the theme color.
   function hexA(hex, a) {
