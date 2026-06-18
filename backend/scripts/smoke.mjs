@@ -153,9 +153,6 @@ async function main() {
     !!attItem && attItem.attachments?.length === 1 && typeof attItem.attachments[0].dataUrl === "string");
 
   // --- frontends are served ---
-  const demo = await fetch(`${BASE}/demo`);
-  ok("widget demo page served (200)", demo.status === 200);
-
   const widgetJs = await fetch(`${BASE}/frontend/widget/feedback.js`);
   ok("embeddable widget.js served (200)", widgetJs.status === 200);
 

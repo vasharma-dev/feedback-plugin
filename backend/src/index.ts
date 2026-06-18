@@ -48,7 +48,7 @@ app.use("/v1/admin/billing", billingRouter); // tenant billing console (secret k
 app.use("/v1/superadmin", superAdminRouter); // platform owner: pricing + all orgs
 
 // ---- Serve the frontend prototypes from this same process (dev convenience) ----
-// /frontend/widget/feedback.js, /demo, /dashboard, /sdk
+// /frontend/widget/feedback.js, /dashboard, /sdk
 const frontendDir = path.resolve(__dirname, "../../frontend");
 app.use("/frontend", express.static(frontendDir));
 // Attachment files when STORAGE=filesystem (empty/no-op in inline mode).
@@ -56,9 +56,6 @@ app.use("/uploads", express.static(UPLOADS_DIR));
 // Product landing page (Get Started → Login → Google sign-in → dashboard).
 app.get("/", (_req, res) => res.sendFile(path.join(frontendDir, "landing", "index.html")));
 app.get("/login", (_req, res) => res.sendFile(path.join(frontendDir, "login", "index.html")));
-app.get("/demo", (_req, res) =>
-  res.sendFile(path.join(frontendDir, "widget", "demo.html"))
-);
 // Super Admin (platform owner) — login + pricing/orgs panel.
 app.get("/admin", (_req, res) =>
   res.sendFile(path.join(frontendDir, "superadmin", "index.html"))
@@ -104,9 +101,9 @@ await ensureSeed();
 app.listen(PORT, () => {
   /* eslint-disable no-console */
   console.log(`\n  jicama feedback backend  →  http://localhost:${PORT}`);
-  console.log(`  demo widget page         →  http://localhost:${PORT}/demo`);
+  console.log(`  landing page             →  http://localhost:${PORT}/`);
   console.log(`  tenant dashboard         →  http://localhost:${PORT}/dashboard`);
-  console.log(`  pricing / signup         →  http://localhost:${PORT}/signup`);
+  console.log(`  sign in                  →  http://localhost:${PORT}/login`);
   console.log(`\n  Acme Inc.   (pro)   public ${DEMO.publicKey}   secret ${DEMO.secretKey}`);
   console.log(`  Globex Corp. (free) public ${DEMO2.publicKey}   secret ${DEMO2.secretKey}`);
   console.log(`\n  Super Admin  →  http://localhost:${PORT}/admin`);

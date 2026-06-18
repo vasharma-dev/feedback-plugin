@@ -62,7 +62,6 @@ Then open:
 |-----|------|
 | http://localhost:4000/ | **Landing page** — what jicama is, how to integrate, live pricing; **Get Started** → login |
 | http://localhost:4000/login | **Login** — "Continue with Google" → onboarding → your dashboard |
-| http://localhost:4000/demo | A pretend customer site ("Acme") with the widget embedded — try the 💬 button |
 | http://localhost:4000/signup | **Pricing + self-serve signup** — pick a plan & pay (test mode), or **Continue with Google** for instant onboarding |
 | http://localhost:4000/auth/google | **Simulated "Sign in with Google"** → onboarding form → personalized dashboard |
 | http://localhost:4000/dashboard | The tenant admin console (React + Vite + Tailwind) — **Feedback inbox**, **Widget** (theming), **Billing**, **Settings** tabs |
@@ -126,7 +125,7 @@ cd backend
 npm run smoke
 ```
 
-It runs 79 checks across the whole system (in the zero-setup fallback mode) — ingest, auth/trust separation, validation, spam
+It runs 78 checks across the whole system (in the zero-setup fallback mode) — ingest, auth/trust separation, validation, spam
 honeypot, admin stats/list/filter/patch, **signup, simulated payments (incl. declined cards),
 token balance + spend-per-feedback + buying token packs, multi-tenant isolation, per-project
 origin lock-down, widget theming/branding, simulated Google login → onboarding → session-based
@@ -134,7 +133,7 @@ dashboard**, and that the widget + signup + React dashboard are served — print
 and exiting non-zero on any failure. Expected:
 
 ```
-✅ ALL PASS — 79 passed, 0 failed
+✅ ALL PASS — 78 passed, 0 failed
 ```
 
 ## The three integration surfaces (DESIGN.md §2)
@@ -197,8 +196,8 @@ the backend, point `data-api` at the backend — CORS is open, so cross-origin w
         data-color="#6C2BD9"></script>
 ```
 
-A floating 💬 button appears. (Inside this prototype's own `/demo` page, `data-api` is omitted
-because the page and API share an origin — across projects you must set it.)
+A floating 💬 button appears. (When the page and the API share an origin, `data-api` can be
+omitted — across projects/origins you must set it.)
 
 **4. View feedback as the admin.** Open <http://localhost:4000/dashboard>, paste your `sk_…`
 (or deep-link `…/dashboard/?key=sk_…`). You'll see **only** your org's submissions, live.
