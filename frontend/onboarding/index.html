@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Set up your organization — jicama feedback</title>
+  <title>Create your account — jicama feedback</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
@@ -11,11 +11,12 @@
     * { box-sizing:border-box; }
     body { margin:0; min-height:100vh; display:grid; place-items:center; background:#f7f8fb;
       font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--ink); }
-    .card { background:#fff; width:min(460px,94vw); border:1px solid var(--line); border-radius:20px;
+    .card { background:#fff; width:min(480px,94vw); border:1px solid var(--line); border-radius:20px;
       padding:32px; box-shadow:0 10px 40px rgba(15,23,42,.07); }
     .logo { width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,var(--brand),var(--brand-700));
       display:grid; place-items:center; font-size:22px; box-shadow:0 6px 16px rgba(108,43,217,.3); }
-    h1 { font-size:24px; letter-spacing:-.02em; margin:18px 0 4px; }
+    .step { font-size:12px; font-weight:700; color:var(--brand); letter-spacing:.05em; text-transform:uppercase; margin-top:16px; }
+    h1 { font-size:24px; letter-spacing:-.02em; margin:4px 0 4px; }
     .sub { color:var(--muted); font-size:14px; margin:0 0 22px; }
     .who { display:flex; align-items:center; gap:10px; background:#f8f7fe; border:1px solid #ece8fb;
       border-radius:12px; padding:10px 12px; margin-bottom:22px; font-size:13px; }
@@ -29,63 +30,121 @@
     .btn:hover:not(:disabled){ filter:brightness(1.07); } .btn:disabled{ opacity:.6; cursor:default; }
     .err { background:#fef2f2; border:1px solid #fecaca; color:#b91c1c; border-radius:10px; padding:11px 14px; font-size:14px; margin-bottom:16px; display:none; }
     .foot { text-align:center; color:#94a3b8; font-size:12px; margin-top:18px; }
+
+    /* success */
+    #done { display:none; }
+    .check { width:54px; height:54px; border-radius:999px; background:#dcfce7; color:#16a34a; display:grid; place-items:center; font-size:27px; margin:0 auto 12px; }
+    .keys { background:#0f172a; color:#e7e2ff; border-radius:12px; padding:14px 16px; font:13px ui-monospace,Menlo,Consolas,monospace; margin:10px 0; word-break:break-all; }
+    .keys .row { display:flex; justify-content:space-between; gap:12px; padding:4px 0; align-items:center; }
+    .keys .k { color:#94a3b8; font-family:Inter; font-size:12px; }
+    .copy { background:#1e293b; color:#cbd5e1; border:none; border-radius:6px; padding:3px 9px; font-size:11px; cursor:pointer; }
+    .note { font-size:13px; color:var(--muted); margin:14px 0 6px; }
+    pre { background:#0f172a; color:#e7e2ff; border-radius:12px; padding:13px; overflow:auto; font-size:12px; line-height:1.5; margin:0 0 14px; white-space:pre-wrap; word-break:break-all; }
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="logo">🍠</div>
-    <h1>Set up your organization</h1>
-    <p class="sub">One quick step and your feedback dashboard is ready.</p>
+    <!-- REGISTRATION -->
+    <div id="form">
+      <div class="logo">🍠</div>
+      <div class="step">Step 2 of 2 · Registration</div>
+      <h1>Create your account</h1>
+      <p class="sub">Two quick details and your feedback dashboard is ready.</p>
 
-    <div class="who" id="who">Loading your account…</div>
-    <div id="err" class="err"></div>
+      <div class="who" id="who">Loading your account…</div>
+      <div id="err" class="err"></div>
 
-    <div class="field">
-      <label for="company">Company / organization name</label>
-      <input id="company" placeholder="Jicama-tech" autocomplete="organization" />
+      <div class="field">
+        <label for="company">Company / organization name</label>
+        <input id="company" placeholder="Acme Inc." autocomplete="organization" />
+      </div>
+      <div class="field">
+        <label for="website">Your website</label>
+        <input id="website" placeholder="https://acme.com" autocomplete="url" inputmode="url" />
+      </div>
+
+      <button id="submit" class="btn">Complete registration →</button>
+      <p class="foot">🍠 jicama feedback</p>
     </div>
-    <div class="field">
-      <label for="website">Website <span style="color:#94a3b8;font-weight:400">(optional)</span></label>
-      <input id="website" placeholder="https://jicama.tech" autocomplete="url" inputmode="url" />
-    </div>
 
-    <button id="submit" class="btn">Create my dashboard →</button>
-    <p class="foot">🍠 jicama feedback</p>
+    <!-- SUCCESS: API key + integration -->
+    <div id="done">
+      <div class="check">✓</div>
+      <h1 style="text-align:center">You're all set 🎉</h1>
+      <p class="sub" style="text-align:center" id="doneSub">Your dashboard is ready.</p>
+
+      <div class="note"><b>Your API keys</b> — the secret key is shown only once, save it now.</div>
+      <div class="keys">
+        <div class="row"><span class="k">PUBLIC key (for the widget)</span><button class="copy" data-copy="pk">Copy</button></div>
+        <div id="pk"></div>
+        <div class="row" style="margin-top:8px"><span class="k">SECRET key (for your dashboard)</span><button class="copy" data-copy="sk">Copy</button></div>
+        <div id="sk"></div>
+      </div>
+
+      <div class="note"><b>Add the widget to your site</b> — paste this one tag:</div>
+      <pre id="snippet"></pre>
+
+      <button id="openDash" class="btn">Open my dashboard →</button>
+    </div>
   </div>
 
   <script>
-    function showErr(m){ var e=document.getElementById("err"); e.textContent="⚠ "+m; e.style.display="block"; }
+    var $ = function(id){ return document.getElementById(id); };
+    function showErr(m){ var e=$("err"); e.textContent="⚠ "+m; e.style.display="block"; }
+    var pk = "", sk = "";
 
-    // Confirm there's a session; bounce to login if not, to the dashboard if already onboarded.
+    // Confirm there's a session; bounce to login if not, to the dashboard if already registered.
     fetch("/v1/me").then(function(r){
-      if(r.status===401){ location.href="/auth/google"; return null; }
+      if(r.status===401){ location.href="/login"; return null; }
       return r.json();
     }).then(function(me){
       if(!me) return;
       if(me.onboarded){ location.href="/dashboard"; return; }
-      var name = (me.user && (me.user.name || me.user.email)) || "you";
-      var initial = (name[0]||"?").toUpperCase();
-      document.getElementById("who").innerHTML =
-        '<div class="av">'+initial+'</div><div>Signed in as <b>'+(me.user.email)+'</b></div>';
-      // Pre-fill a friendly company guess from the email domain.
+      var initial = ((me.user.name || me.user.email)[0]||"?").toUpperCase();
+      $("who").innerHTML = '<div class="av">'+initial+'</div><div>Signed in as <b>'+me.user.email+'</b></div>';
       var dom = (me.user.email.split("@")[1]||"").split(".")[0];
-      if(dom && dom!=="gmail" && dom!=="googlemail"){ document.getElementById("company").value = dom.charAt(0).toUpperCase()+dom.slice(1); }
+      if(dom && dom!=="gmail" && dom!=="googlemail"){
+        $("company").value = dom.charAt(0).toUpperCase()+dom.slice(1);
+        $("website").value = "https://"+(me.user.email.split("@")[1]||"");
+      }
     }).catch(function(){ showErr("Couldn't load your account — is the backend running?"); });
 
-    document.getElementById("submit").onclick = async function(){
-      var company = document.getElementById("company").value.trim();
+    $("submit").onclick = async function(){
+      var company = $("company").value.trim();
+      var website = $("website").value.trim();
       if(!company) return showErr("Please enter your company name.");
+      if(!website) return showErr("Please enter your website.");
       var btn=this; btn.disabled=true; btn.textContent="Creating…";
       try {
         var r = await fetch("/v1/onboarding", {
           method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({ company: company })
+          body: JSON.stringify({ company: company, website: website })
         });
         var b = await r.json();
-        if(!r.ok) throw new Error(b.message || b.error || "Onboarding failed");
-        location.href = "/dashboard";
-      } catch(e){ showErr(e.message); btn.disabled=false; btn.textContent="Create my dashboard →"; }
+        if(!r.ok) throw new Error(b.message || b.error || "Registration failed");
+        pk = b.publicKey; sk = b.secretKey;
+        showSuccess(b);
+      } catch(e){ showErr(e.message); btn.disabled=false; btn.textContent="Complete registration →"; }
     };
+
+    function showSuccess(b){
+      $("form").style.display="none";
+      $("doneSub").textContent = b.name + " is ready. Here are your keys and snippet.";
+      $("pk").textContent = pk;
+      $("sk").textContent = sk;
+      $("snippet").textContent =
+        '<script src="'+location.origin+'/frontend/widget/feedback.js"\n        data-key="'+pk+'"\n        data-api="'+location.origin+'"><\/script>';
+      $("openDash").onclick = function(){ location.href = "/dashboard/?key=" + encodeURIComponent(sk); };
+      $("done").style.display="block";
+    }
+
+    document.querySelectorAll(".copy").forEach(function(btn){
+      btn.onclick = function(){
+        var v = btn.getAttribute("data-copy")==="pk" ? pk : sk;
+        if(navigator.clipboard) navigator.clipboard.writeText(v);
+        btn.textContent="Copied!"; setTimeout(function(){ btn.textContent="Copy"; }, 1200);
+      };
+    });
   </script>
 </body>
 </html>

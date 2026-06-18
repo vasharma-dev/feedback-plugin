@@ -130,6 +130,7 @@ accountRouter.get("/me", async (req, res, next) => {
 
 const onboardingSchema = z.object({
   company: z.string().min(1).max(120),
+  website: z.string().max(200).optional(),
 });
 
 accountRouter.post("/onboarding", async (req, res, next) => {
@@ -141,7 +142,7 @@ accountRouter.post("/onboarding", async (req, res, next) => {
     if (!parsed.success) {
       return res.status(422).json({ error: "validation_error", details: parsed.error.flatten() });
     }
-    const account = await onboardUser(user.id, { company: parsed.data.company });
+    const account = await onboardUser(user.id, { company: parsed.data.company, website: parsed.data.website });
     res.status(201).json({
       ok: true,
       tenantId: account.tenant.id,

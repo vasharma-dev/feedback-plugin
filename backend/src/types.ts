@@ -18,6 +18,7 @@ export interface CardOnFile {
 export interface Tenant {
   id: string;
   name: string;
+  website: string | null;
   plan: Plan;
   tokenBalance: number;
   createdAt: string;

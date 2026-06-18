@@ -76,6 +76,7 @@ function toProject(r: ProjectRow): Project {
 type TenantRow = {
   id: string;
   name: string;
+  website: string | null;
   plan: string;
   tokenBalance: number;
   createdAt: Date;
@@ -93,6 +94,7 @@ function toTenant(r: TenantRow): Tenant {
   return {
     id: r.id,
     name: r.name,
+    website: r.website,
     plan: r.plan as Plan,
     tokenBalance: r.tokenBalance,
     createdAt: r.createdAt.toISOString(),
@@ -632,6 +634,7 @@ export interface CreateAccountInput {
   company: string;
   billingEmail: string;
   plan: PlanId;
+  website?: string;
   card?: CardInput;
 }
 
@@ -673,6 +676,7 @@ export async function createTenantAccount(input: CreateAccountInput): Promise<Cr
     data: {
       id: tenantId,
       name: company,
+      website: input.website?.trim() || null,
       plan: plan.id,
       tokenBalance: starterTokens(plan.id), // free starter grant (free=100, pro=5k, ent=100k)
       billingEmail: input.billingEmail.trim(),
@@ -865,7 +869,7 @@ export async function getTenantKeys(
  */
 export async function onboardUser(
   userId: string,
-  input: { company: string }
+  input: { company: string; website?: string }
 ): Promise<CreatedAccount> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new BillingError(404, "user_not_found");
@@ -873,6 +877,7 @@ export async function onboardUser(
 
   const account = await createTenantAccount({
     company: input.company,
+    website: input.website,
     billingEmail: user.email,
     plan: "free",
   });
