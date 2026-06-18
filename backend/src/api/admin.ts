@@ -49,6 +49,7 @@ const themeSchema = z
     launcherIcon: z.string().max(8).optional(),
     headerTitle: z.string().max(80).optional(),
     headerSubtitle: z.string().max(160).optional(),
+    dialogBg: z.string().regex(/^#[0-9a-fA-F]{6}$/, "dialogBg must be a #rrggbb hex").optional(),
     hideBranding: z.boolean().optional(),
   })
   .optional();

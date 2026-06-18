@@ -10,6 +10,7 @@ const DEFAULTS: WidgetTheme = {
   launcherIcon: "💬",
   headerTitle: "Share your feedback",
   headerSubtitle: "We read every message — thank you for helping us improve.",
+  dialogBg: "#ffffff",
   hideBranding: false,
 };
 
@@ -105,20 +106,33 @@ function Editor({ apiKey, project }: { apiKey: string; project: Project }) {
               </div>
             </div>
             <div>
-              <label className={label}>Position</label>
-              <div className="grid grid-cols-2 gap-2">
-                {(["bottom-left", "bottom-right"] as const).map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => set("position", p)}
-                    className={`py-2 rounded-xl text-xs font-medium border transition ${
-                      theme.position === p ? "border-brand-400 bg-brand-50 text-brand-700 ring-2 ring-brand-100" : "border-slate-200 text-slate-600 hover:border-slate-300"
-                    }`}
-                  >
-                    {p === "bottom-left" ? "◧ Left" : "Right ◨"}
-                  </button>
-                ))}
+              <label className={label}>Dialog background</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={theme.dialogBg}
+                  onChange={(e) => set("dialogBg", e.target.value)}
+                  className="w-10 h-10 rounded-lg border border-slate-200 bg-white cursor-pointer p-0.5"
+                />
+                <input className={`${input} font-mono`} value={theme.dialogBg} onChange={(e) => set("dialogBg", e.target.value)} spellCheck={false} />
               </div>
+            </div>
+          </div>
+
+          <div>
+            <label className={label}>Position</label>
+            <div className="grid grid-cols-2 gap-2 max-w-[220px]">
+              {(["bottom-left", "bottom-right"] as const).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => set("position", p)}
+                  className={`py-2 rounded-xl text-xs font-medium border transition ${
+                    theme.position === p ? "border-brand-400 bg-brand-50 text-brand-700 ring-2 ring-brand-100" : "border-slate-200 text-slate-600 hover:border-slate-300"
+                  }`}
+                >
+                  {p === "bottom-left" ? "◧ Left" : "Right ◨"}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -220,8 +234,9 @@ function Preview({ theme }: { theme: WidgetTheme }) {
       {/* mini modal preview */}
       {open && (
         <div
-          className="absolute bg-white rounded-2xl shadow-2xl p-4 w-64"
+          className="absolute rounded-2xl shadow-2xl p-4 w-64"
           style={{
+            background: theme.dialogBg,
             bottom: 70,
             left: theme.position === "bottom-left" ? 16 : undefined,
             right: theme.position === "bottom-right" ? 16 : undefined,

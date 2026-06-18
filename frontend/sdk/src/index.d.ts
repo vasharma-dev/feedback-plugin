@@ -10,6 +10,7 @@ export interface FeedbackTheme {
   launcherIcon?: string;
   headerTitle?: string;
   headerSubtitle?: string;
+  dialogBg?: string;
   hideBranding?: boolean;
 }
 

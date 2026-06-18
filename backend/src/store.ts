@@ -46,6 +46,7 @@ type ProjectRow = {
   launcherIcon: string;
   headerTitle: string;
   headerSubtitle: string;
+  dialogBg: string;
   hideBranding: boolean;
   allowedOrigins: string;
 };
@@ -63,6 +64,7 @@ function toProject(r: ProjectRow): Project {
         launcherIcon: r.launcherIcon,
         headerTitle: r.headerTitle,
         headerSubtitle: r.headerSubtitle,
+        dialogBg: r.dialogBg,
         hideBranding: r.hideBranding,
       },
       allowedOrigins: JSON.parse(r.allowedOrigins) as string[],
@@ -243,6 +245,7 @@ export interface ProjectThemeInput {
   launcherIcon?: string;
   headerTitle?: string;
   headerSubtitle?: string;
+  dialogBg?: string;
   hideBranding?: boolean;
 }
 
@@ -262,6 +265,7 @@ export async function updateProjectTheme(
   if (theme.launcherIcon !== undefined) data.launcherIcon = theme.launcherIcon;
   if (theme.headerTitle !== undefined) data.headerTitle = theme.headerTitle;
   if (theme.headerSubtitle !== undefined) data.headerSubtitle = theme.headerSubtitle;
+  if (theme.dialogBg !== undefined) data.dialogBg = theme.dialogBg;
   if (theme.hideBranding !== undefined) data.hideBranding = theme.hideBranding;
   const res = await prisma.project.updateMany({ where: { id: projectId, tenantId }, data });
   if (res.count === 0) return undefined;

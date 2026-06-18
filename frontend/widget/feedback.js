@@ -95,6 +95,7 @@
             launcherIcon: "💬",
             headerTitle: "Share your feedback",
             headerSubtitle: "We read every message — thank you for helping us improve.",
+            dialogBg: "#ffffff",
             hideBranding: false,
           },
           opts.theme || {}
@@ -240,7 +241,7 @@
       var card = el("div", {
         "class": "jcm-card",
         style: {
-          background: "#fff", borderRadius: "18px", padding: "22px", width: "min(440px, 94vw)",
+          background: this.cfg.theme.dialogBg || "#fff", borderRadius: "18px", padding: "22px", width: "min(440px, 94vw)",
           boxShadow: "0 24px 70px rgba(0,0,0,.32)", font: "14px " + FONT, color: "#0f172a",
           maxHeight: "92vh", overflow: "auto", "--jcm": color,
         },

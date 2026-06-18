@@ -79,6 +79,7 @@ model Project {
   launcherIcon   String     @default("💬") // emoji on the button + modal
   headerTitle    String     @default("Share your feedback")
   headerSubtitle String     @default("We read every message — thank you for helping us improve.")
+  dialogBg       String     @default("#ffffff") // background color of the feedback dialog
   hideBranding   Boolean    @default(false) // white-label: drop "Powered by jicama"
   allowedOrigins String     @default("[\"*\"]") // JSON array of origins
   tenant         Tenant     @relation(fields: [tenantId], references: [id])

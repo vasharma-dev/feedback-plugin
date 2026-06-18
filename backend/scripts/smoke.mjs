@@ -294,19 +294,20 @@ async function main() {
   // Update the theme via PATCH; the project echoes the new values back.
   const themePatch = await fetch(`${BASE}/v1/admin/projects/${freeProjectId}`, {
     method: "PATCH", headers: j(freeAcct.secretKey),
-    body: JSON.stringify({ theme: { color: "#ff0066", launcherText: "Tell us!", headerTitle: "Got feedback?", hideBranding: true } }),
+    body: JSON.stringify({ theme: { color: "#ff0066", dialogBg: "#101828", launcherText: "Tell us!", headerTitle: "Got feedback?", hideBranding: true } }),
   });
   const themed = await themePatch.json();
   ok("admin updates widget theme (200)", themePatch.status === 200, `got ${themePatch.status}`);
-  ok("theme fields are persisted",
+  ok("theme fields are persisted (incl. dialog background)",
     themed.settings?.theme?.color === "#ff0066" &&
+    themed.settings?.theme?.dialogBg === "#101828" &&
     themed.settings?.theme?.launcherText === "Tell us!" &&
     themed.settings?.theme?.hideBranding === true);
 
   // The widget pulls this via GET /v1/config — confirm it reflects the new theme.
   const cfg2 = await (await fetch(`${BASE}/v1/config`, { headers: j(freeAcct.publicKey) })).json();
   ok("widget /v1/config serves the saved theme",
-    cfg2.theme?.color === "#ff0066" && cfg2.theme?.launcherText === "Tell us!" && cfg2.theme?.hideBranding === true);
+    cfg2.theme?.color === "#ff0066" && cfg2.theme?.dialogBg === "#101828" && cfg2.theme?.launcherText === "Tell us!" && cfg2.theme?.hideBranding === true);
 
   // Invalid theme values are rejected.
   const badTheme = await fetch(`${BASE}/v1/admin/projects/${freeProjectId}`, {

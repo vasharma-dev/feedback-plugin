@@ -114,8 +114,8 @@ and exiting non-zero on any failure. Expected:
         data-color="#6C2BD9"></script>
 ```
 
-> The widget pulls its **theme/branding from the server** (`GET /v1/config`), so colors, button
-> text, modal copy and white-labeling are all controlled from the dashboard's **Widget** tab —
+> The widget pulls its **theme/branding from the server** (`GET /v1/config`), so brand color,
+> **dialog background**, button text, modal copy and white-labeling are all controlled from the dashboard's **Widget** tab —
 > change them there and every embed updates, no code edit. `data-*` attributes act as the initial
 > look until the saved theme loads.
 
