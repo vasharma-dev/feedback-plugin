@@ -331,6 +331,16 @@ async function main() {
   });
   ok("admin rejects an invalid prefix (422)", badPrefix.status === 422, `got ${badPrefix.status}`);
 
+  // ---- AI context + duplicate grouping (heuristic fallback when no AI configured) ----
+  const sub = (message) => fetch(`${BASE}/v1/feedback`, { method: "POST", headers: j(freeAcct.publicKey), body: JSON.stringify({ type: "bug", message }) }).then((r) => r.json());
+  const g1 = await sub("The export button does nothing when I click it on the reports page");
+  const g2 = await sub("Clicking the export button on the reports page just does nothing");
+  ok("new feedback gets an AI summary", typeof g1.summary === "string" && g1.summary.length > 0);
+  ok("a same-issue report is grouped under the first", g2.groupId === g1.id, `got ${g2.groupId} vs ${g1.id}`);
+  const glist = await (await fetch(`${BASE}/v1/admin/feedback?type=bug`, { headers: j(freeAcct.secretKey) })).json();
+  const canon = glist.items.find((i) => i.id === g1.id);
+  ok("the canonical shows a similar-reports count", !!canon && canon.similarCount >= 1, `got ${canon && canon.similarCount}`);
+
   // ====================================================================================
   // Tokens — the currency for accepting feedback (1 feedback = 1 token)
   // ====================================================================================

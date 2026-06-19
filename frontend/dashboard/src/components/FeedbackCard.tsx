@@ -67,6 +67,20 @@ export default function FeedbackCard({
             {item.ref}
           </span>
         )}
+        {item.module && (
+          <span className="text-[11px] font-medium text-violet-700 bg-violet-50 ring-1 ring-inset ring-violet-200 rounded-md px-1.5 py-0.5" title="AI-detected module">
+            {item.module}
+          </span>
+        )}
+        {item.groupId ? (
+          <span className="text-[11px] font-medium text-slate-500 bg-slate-100 rounded-md px-1.5 py-0.5" title="Grouped as a duplicate of an earlier report">
+            ↳ duplicate
+          </span>
+        ) : item.similarCount ? (
+          <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 ring-1 ring-inset ring-amber-200 rounded-md px-1.5 py-0.5" title="Similar reports grouped under this one">
+            🔁 {item.similarCount + 1} reports
+          </span>
+        ) : null}
         <Stars n={item.rating} />
         <span className="text-slate-400 text-xs" title={fullTime(item.createdAt)}>
           {relativeTime(item.createdAt)}
@@ -101,6 +115,13 @@ export default function FeedbackCard({
       <p className="mt-3 text-[15px] leading-relaxed text-slate-800 whitespace-pre-wrap">
         {item.message}
       </p>
+
+      {item.summary && (
+        <p className="mt-2 text-[13px] text-slate-500 flex items-start gap-1.5">
+          <span aria-hidden>✨</span>
+          <span><span className="font-medium text-slate-600">AI:</span> {item.summary}</span>
+        </p>
+      )}
 
       {img && (
         <a href={img.dataUrl} target="_blank" rel="noreferrer" className="inline-block mt-3">

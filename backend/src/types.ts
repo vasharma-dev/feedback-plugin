@@ -97,6 +97,10 @@ export interface Attachment {
 export interface Feedback {
   id: string;
   ref: string | null; // human-friendly reference, e.g. "jicamabug01"
+  groupId: string | null; // canonical feedback id this duplicates (null = canonical)
+  summary: string | null; // AI one-line context
+  module: string | null; // AI-derived area/module
+  similarCount?: number; // duplicates grouped under this one (computed, canonicals only)
   projectId: string;
   tenantId: string;
   type: FeedbackType;

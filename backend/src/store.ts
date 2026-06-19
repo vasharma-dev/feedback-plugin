@@ -5,6 +5,7 @@
 // all functions are async because the DB is.
 
 import crypto from "node:crypto";
+import { analyzeFeedback } from "./analysis.js";
 import { nanoid } from "nanoid";
 import { prisma } from "./db.js";
 import { superAdmin as superAdminCfg } from "./config.js";
@@ -146,6 +147,9 @@ function toPayment(r: PaymentRow): Payment {
 type FeedbackRow = {
   id: string;
   ref: string | null;
+  groupId: string | null;
+  summary: string | null;
+  module: string | null;
   projectId: string;
   tenantId: string;
   type: string;
@@ -162,6 +166,9 @@ function toFeedback(r: FeedbackRow): Feedback {
   return {
     id: r.id,
     ref: r.ref,
+    groupId: r.groupId,
+    summary: r.summary,
+    module: r.module,
     projectId: r.projectId,
     tenantId: r.tenantId,
     type: r.type as FeedbackType,
@@ -364,7 +371,48 @@ export async function queryFeedback(query: FeedbackQuery): Promise<Feedback[]> {
     include: { attachments: true },
     orderBy: { createdAt: "desc" },
   });
-  return rows.map(toFeedback);
+  // How many duplicates are grouped under each canonical, so the inbox can show "🔁 N similar".
+  const groups = await prisma.feedback.groupBy({
+    by: ["groupId"],
+    where: { tenantId: query.tenantId, groupId: { not: null } },
+    _count: { _all: true },
+  });
+  const dupes: Record<string, number> = {};
+  for (const g of groups) if (g.groupId) dupes[g.groupId] = g._count._all;
+  return rows.map((r) => ({ ...toFeedback(r), similarCount: dupes[r.id] ?? 0 }));
+}
+
+/**
+ * AI pass over a just-created feedback: derive a summary + module, and if it's the SAME underlying
+ * issue as a recent open item, group it under that one's canonical. Never throws.
+ */
+export async function analyzeAndGroupFeedback(id: string): Promise<Feedback | undefined> {
+  const fb = await prisma.feedback.findUnique({ where: { id } });
+  if (!fb) return undefined;
+
+  // Candidates: same tenant + type, still open, excluding this one (most recent 20).
+  const candRows = await prisma.feedback.findMany({
+    where: { tenantId: fb.tenantId, type: fb.type, status: { in: ["new", "in_progress"] }, id: { not: id } },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+    select: { id: true, message: true, groupId: true },
+  });
+
+  const analysis = await analyzeFeedback(fb.message, fb.type, candRows.map((c) => ({ id: c.id, message: c.message })));
+
+  // Resolve to the ROOT canonical so all duplicates of one issue share a groupId.
+  let groupId: string | null = null;
+  if (analysis.matchId) {
+    const match = candRows.find((c) => c.id === analysis.matchId);
+    groupId = match?.groupId ?? analysis.matchId;
+  }
+
+  const row = await prisma.feedback.update({
+    where: { id },
+    data: { groupId, summary: analysis.summary || null, module: analysis.module || null },
+    include: { attachments: true },
+  });
+  return toFeedback(row);
 }
 
 export async function updateFeedbackStatus(

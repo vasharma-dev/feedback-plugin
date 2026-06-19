@@ -5,7 +5,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { requirePublicKey } from "../middleware/auth.js";
 import { rateLimit } from "../middleware/rateLimit.js";
-import { createFeedback, spendToken } from "../store.js";
+import { analyzeAndGroupFeedback, createFeedback, spendToken } from "../store.js";
 
 export const ingestRouter = Router();
 
@@ -64,7 +64,16 @@ ingestRouter.post("/feedback", requirePublicKey, rateLimit, async (req, res, nex
       attachments: body.attachments ?? [],
     });
 
-    res.status(201).json({ id: fb.id, ref: fb.ref, status: fb.status, createdAt: fb.createdAt });
+    // Add AI context + duplicate grouping (degrades to a heuristic; never blocks on AI failure).
+    const analyzed = (await analyzeAndGroupFeedback(fb.id)) ?? fb;
+    res.status(201).json({
+      id: analyzed.id,
+      ref: analyzed.ref,
+      status: analyzed.status,
+      summary: analyzed.summary,
+      groupId: analyzed.groupId,
+      createdAt: analyzed.createdAt,
+    });
   } catch (err) {
     next(err);
   }

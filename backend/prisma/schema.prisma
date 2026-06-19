@@ -108,6 +108,9 @@ model ApiKey {
 model Feedback {
   id          String       @id
   ref         String? // human-friendly reference, e.g. "jicamabug01" (per the project's prefix)
+  groupId     String? // AI grouping: the canonical feedback id this duplicates (null = canonical)
+  summary     String? // AI one-line context for the issue
+  module      String? // AI-derived area/module
   projectId   String
   tenantId    String
   type        String // bug | idea | praise | question

@@ -11,6 +11,10 @@ export interface Attachment {
 export interface Feedback {
   id: string;
   ref: string | null;
+  groupId: string | null;
+  summary: string | null;
+  module: string | null;
+  similarCount?: number;
   type: FeedbackType;
   message: string;
   rating: number | null;

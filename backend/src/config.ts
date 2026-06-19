@@ -23,6 +23,18 @@ export const stripe = {
   secretKey: process.env.STRIPE_SECRET_KEY || "",
 };
 
+// AI for feedback context + duplicate grouping. OpenAI-compatible chat endpoint — works with
+// Qwen (DashScope compatible-mode, or a local Ollama). Unset → a built-in heuristic is used.
+export const ai = {
+  apiUrl: (process.env.QWEN_API_URL || "").replace(/\/$/, ""), // e.g. https://dashscope.../compatible-mode/v1
+  apiKey: process.env.QWEN_API_KEY || "",
+  model: process.env.QWEN_MODEL || "qwen-plus",
+};
+
+export function isAiConfigured(): boolean {
+  return Boolean(ai.apiUrl);
+}
+
 // Super Admin (platform owner) seed credentials. Override in .env for anything real.
 export const superAdmin = {
   email: (process.env.SUPERADMIN_EMAIL || "super@jicama.tech").trim().toLowerCase(),
