@@ -64,7 +64,7 @@ ingestRouter.post("/feedback", requirePublicKey, rateLimit, async (req, res, nex
       attachments: body.attachments ?? [],
     });
 
-    res.status(201).json({ id: fb.id, status: fb.status, createdAt: fb.createdAt });
+    res.status(201).json({ id: fb.id, ref: fb.ref, status: fb.status, createdAt: fb.createdAt });
   } catch (err) {
     next(err);
   }

@@ -317,6 +317,20 @@ async function main() {
   });
   ok("admin rejects an invalid theme color (422)", badTheme.status === 422, `got ${badTheme.status}`);
 
+  // Custom feedback reference prefix → new feedback gets a sequential id like "smokebug01".
+  await fetch(`${BASE}/v1/admin/projects/${freeProjectId}`, {
+    method: "PATCH", headers: j(freeAcct.secretKey), body: JSON.stringify({ feedbackPrefix: "smokebug" }),
+  });
+  const refA = await (await fetch(`${BASE}/v1/feedback`, { method: "POST", headers: j(freeAcct.publicKey), body: JSON.stringify({ type: "bug", message: "ref one" }) })).json();
+  const refB = await (await fetch(`${BASE}/v1/feedback`, { method: "POST", headers: j(freeAcct.publicKey), body: JSON.stringify({ type: "bug", message: "ref two" }) })).json();
+  ok("feedback gets the custom reference prefix", /^smokebug\d{2,}$/.test(refA.ref || ""), `got ${refA.ref}`);
+  ok("references increment sequentially", Number(refB.ref.replace(/\D/g, "")) === Number(refA.ref.replace(/\D/g, "")) + 1);
+  // invalid prefix rejected
+  const badPrefix = await fetch(`${BASE}/v1/admin/projects/${freeProjectId}`, {
+    method: "PATCH", headers: j(freeAcct.secretKey), body: JSON.stringify({ feedbackPrefix: "bad prefix!" }),
+  });
+  ok("admin rejects an invalid prefix (422)", badPrefix.status === 422, `got ${badPrefix.status}`);
+
   // ====================================================================================
   // Tokens — the currency for accepting feedback (1 feedback = 1 token)
   // ====================================================================================

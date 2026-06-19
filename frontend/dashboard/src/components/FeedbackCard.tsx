@@ -62,6 +62,11 @@ export default function FeedbackCard({
           <span aria-hidden>{type.emoji}</span>
           {type.label}
         </span>
+        {item.ref && (
+          <span className="font-mono text-[11px] font-semibold text-slate-500 bg-slate-100 rounded-md px-1.5 py-0.5" title="Reference ID">
+            {item.ref}
+          </span>
+        )}
         <Stars n={item.rating} />
         <span className="text-slate-400 text-xs" title={fullTime(item.createdAt)}>
           {relativeTime(item.createdAt)}

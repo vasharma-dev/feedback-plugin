@@ -96,12 +96,15 @@ export function patchProjectOrigins(
 export function patchProjectTheme(
   key: string,
   id: string,
-  theme: Partial<WidgetTheme>
+  theme: Partial<WidgetTheme>,
+  feedbackPrefix?: string
 ): Promise<Project> {
+  const body: Record<string, unknown> = { theme };
+  if (feedbackPrefix !== undefined) body.feedbackPrefix = feedbackPrefix;
   return api(`/v1/admin/projects/${id}`, key, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ theme }),
+    body: JSON.stringify(body),
   }).then(json<Project>);
 }
 

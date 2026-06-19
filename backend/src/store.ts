@@ -49,6 +49,7 @@ type ProjectRow = {
   headerSubtitle: string;
   dialogBg: string;
   hideBranding: boolean;
+  feedbackPrefix: string;
   allowedOrigins: string;
 };
 
@@ -57,6 +58,7 @@ function toProject(r: ProjectRow): Project {
     id: r.id,
     tenantId: r.tenantId,
     name: r.name,
+    feedbackPrefix: r.feedbackPrefix,
     settings: {
       theme: {
         color: r.themeColor,
@@ -143,6 +145,7 @@ function toPayment(r: PaymentRow): Payment {
 
 type FeedbackRow = {
   id: string;
+  ref: string | null;
   projectId: string;
   tenantId: string;
   type: string;
@@ -158,6 +161,7 @@ type FeedbackRow = {
 function toFeedback(r: FeedbackRow): Feedback {
   return {
     id: r.id,
+    ref: r.ref,
     projectId: r.projectId,
     tenantId: r.tenantId,
     type: r.type as FeedbackType,
@@ -274,6 +278,20 @@ export async function updateProjectTheme(
   return getProject(projectId);
 }
 
+/** Set the project's feedback-reference prefix (e.g. "jicamabug"). Tenant-scoped. */
+export async function updateProjectPrefix(
+  tenantId: string,
+  projectId: string,
+  prefix: string
+): Promise<Project | undefined> {
+  const res = await prisma.project.updateMany({
+    where: { id: projectId, tenantId },
+    data: { feedbackPrefix: prefix },
+  });
+  if (res.count === 0) return undefined;
+  return getProject(projectId);
+}
+
 // ---- Feedback ----
 export interface CreateFeedbackInput {
   projectId: string;
@@ -296,9 +314,21 @@ export async function createFeedback(input: CreateFeedbackInput): Promise<Feedba
       dataUrl: await putAttachment(a),
     }))
   );
+
+  // Atomically take the next number for this project and build the human-friendly reference.
+  const proj = await prisma.project.update({
+    where: { id: input.projectId },
+    data: { feedbackSeq: { increment: 1 } },
+    select: { feedbackSeq: true, feedbackPrefix: true },
+  });
+  const ref = proj.feedbackPrefix
+    ? `${proj.feedbackPrefix}${String(proj.feedbackSeq).padStart(2, "0")}`
+    : null;
+
   const row = await prisma.feedback.create({
     data: {
       id: `fb_${nanoid(10)}`,
+      ref,
       projectId: input.projectId,
       tenantId: input.tenantId,
       type: input.type,

@@ -11,6 +11,7 @@ import {
   statsFor,
   updateFeedbackStatus,
   updateProjectOrigins,
+  updateProjectPrefix,
   updateProjectTheme,
 } from "../store.js";
 
@@ -67,6 +68,8 @@ const themeSchema = z
 const projectPatchSchema = z.object({
   allowedOrigins: z.array(z.string().max(2000)).max(50).optional(),
   theme: themeSchema,
+  // Reference-ID prefix: letters/numbers/_/- only, so it reads cleanly (e.g. "jicamabug").
+  feedbackPrefix: z.string().regex(/^[A-Za-z0-9_-]*$/, "prefix can use letters, numbers, _ and -").max(20).optional(),
 });
 
 // PATCH /v1/admin/projects/:id  { allowedOrigins?: string[], theme?: {...} }
@@ -77,8 +80,8 @@ adminRouter.patch("/projects/:id", async (req, res, next) => {
     if (!parsed.success) {
       return res.status(422).json({ error: "validation_error", details: parsed.error.flatten() });
     }
-    const { allowedOrigins, theme } = parsed.data;
-    if (!allowedOrigins && !theme) {
+    const { allowedOrigins, theme, feedbackPrefix } = parsed.data;
+    if (!allowedOrigins && !theme && feedbackPrefix === undefined) {
       return res.status(422).json({ error: "nothing_to_update" });
     }
 
@@ -109,6 +112,11 @@ adminRouter.patch("/projects/:id", async (req, res, next) => {
 
     if (theme) {
       updated = await updateProjectTheme(req.tenantId!, req.params.id, theme);
+      if (!updated) return res.status(404).json({ error: "not_found" });
+    }
+
+    if (feedbackPrefix !== undefined) {
+      updated = await updateProjectPrefix(req.tenantId!, req.params.id, feedbackPrefix);
       if (!updated) return res.status(404).json({ error: "not_found" });
     }
 

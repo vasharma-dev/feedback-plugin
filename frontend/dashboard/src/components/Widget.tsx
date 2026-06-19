@@ -52,6 +52,7 @@ export default function Widget({ apiKey }: { apiKey: string }) {
 
 function Editor({ apiKey, project }: { apiKey: string; project: Project }) {
   const [theme, setTheme] = useState<WidgetTheme>({ ...DEFAULTS, ...project.settings.theme });
+  const [prefix, setPrefix] = useState(project.feedbackPrefix ?? "");
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -59,6 +60,11 @@ function Editor({ apiKey, project }: { apiKey: string; project: Project }) {
 
   const set = <K extends keyof WidgetTheme>(k: K, v: WidgetTheme[K]) => {
     setTheme((t) => ({ ...t, [k]: v }));
+    setSaved(false);
+  };
+
+  const onPrefix = (v: string) => {
+    setPrefix(v.replace(/[^A-Za-z0-9_-]/g, "")); // keep it clean as they type
     setSaved(false);
   };
 
@@ -79,8 +85,9 @@ function Editor({ apiKey, project }: { apiKey: string; project: Project }) {
     setErr(null);
     setBusy(true);
     try {
-      const updated = await patchProjectTheme(apiKey, project.id, theme);
+      const updated = await patchProjectTheme(apiKey, project.id, theme, prefix);
       setTheme({ ...DEFAULTS, ...updated.settings.theme });
+      setPrefix(updated.feedbackPrefix ?? "");
       setSaved(true);
       setTimeout(() => setSaved(false), 2200);
     } catch (e) {
@@ -200,6 +207,25 @@ function Editor({ apiKey, project }: { apiKey: string; project: Project }) {
           <div>
             <label className={label}>Modal subtitle</label>
             <textarea className={`${input} resize-none`} rows={2} maxLength={160} value={theme.headerSubtitle} onChange={(e) => set("headerSubtitle", e.target.value)} />
+          </div>
+
+          <div className="border-t border-slate-100 pt-4">
+            <label className={label}>Feedback ID prefix</label>
+            <input
+              className={`${input} font-mono`}
+              maxLength={20}
+              placeholder="e.g. jicamabug"
+              value={prefix}
+              onChange={(e) => onPrefix(e.target.value)}
+              spellCheck={false}
+            />
+            <p className="text-xs text-slate-400 mt-1.5">
+              {prefix ? (
+                <>New feedback is numbered <span className="font-mono text-slate-600">{prefix}01</span>, <span className="font-mono text-slate-600">{prefix}02</span>, … (existing items keep their IDs).</>
+              ) : (
+                <>Give feedback a friendly, sequential ID. Leave blank to use the default internal ID.</>
+              )}
+            </p>
           </div>
 
           <label className="flex items-center gap-3 pt-1 cursor-pointer">

@@ -59,6 +59,7 @@ export interface Project {
   id: string;
   tenantId: string;
   name: string;
+  feedbackPrefix: string; // "" = no custom reference; else e.g. "jicamabug"
   settings: {
     theme: WidgetTheme;
     allowedOrigins: string[]; // ["*"] in dev; real domains in prod
@@ -95,6 +96,7 @@ export interface Attachment {
 
 export interface Feedback {
   id: string;
+  ref: string | null; // human-friendly reference, e.g. "jicamabug01"
   projectId: string;
   tenantId: string;
   type: FeedbackType;

@@ -10,6 +10,7 @@ export interface Attachment {
 
 export interface Feedback {
   id: string;
+  ref: string | null;
   type: FeedbackType;
   message: string;
   rating: number | null;
@@ -43,6 +44,7 @@ export interface Project {
   tenantId: string;
   name: string;
   publicKey?: string | null;
+  feedbackPrefix?: string;
   settings: {
     theme: WidgetTheme;
     allowedOrigins: string[];
