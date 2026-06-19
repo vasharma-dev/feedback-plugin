@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { getEvents, type FeedbackEvent } from "../api";
+import { addComment, getEvents, type FeedbackEvent } from "../api";
 import { fullTime, initials, relativeTime } from "../lib/format";
 import type { Feedback, FeedbackStatus } from "../types";
 
@@ -69,10 +69,25 @@ export default function FeedbackCard({
 
   const [showActivity, setShowActivity] = useState(false);
   const [events, setEvents] = useState<FeedbackEvent[] | null>(null);
+  const [comment, setComment] = useState("");
+  const [posting, setPosting] = useState(false);
   function toggleActivity() {
     const next = !showActivity;
     setShowActivity(next);
     if (next && !events) getEvents(apiKey, item.id).then(setEvents).catch(() => setEvents([]));
+  }
+  async function postComment() {
+    const text = comment.trim();
+    if (!text) return;
+    setPosting(true);
+    try {
+      setEvents(await addComment(apiKey, item.id, text));
+      setComment("");
+    } catch {
+      /* surfaced by the parent's error handling on reload */
+    } finally {
+      setPosting(false);
+    }
   }
 
   return (
@@ -214,12 +229,35 @@ export default function FeedbackCard({
             events.map((e) => (
               <li key={e.id} className="relative pl-4 text-xs text-slate-600">
                 <span className="absolute -left-[7px] top-0.5 text-[10px]">{EVENT_ICON[e.kind] || "•"}</span>
-                <span className="font-medium text-slate-700">{e.actorName}</span> {eventText(e)}
+                <span className="font-medium text-slate-700">{e.actorName}</span>{" "}
+                {e.kind === "comment" ? (
+                  <span className="text-slate-700">commented: “{e.detail}”</span>
+                ) : (
+                  eventText(e)
+                )}
                 <span className="text-slate-400" title={fullTime(e.createdAt)}> · {relativeTime(e.createdAt)}</span>
               </li>
             ))
           )}
         </ol>
+      )}
+      {showActivity && (
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && postComment()}
+            placeholder="Add a comment…"
+            className="flex-1 text-xs px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-200 focus:border-brand-400 transition"
+          />
+          <button
+            onClick={postComment}
+            disabled={posting || !comment.trim()}
+            className="text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 disabled:opacity-50 rounded-lg px-3 py-2 transition"
+          >
+            {posting ? "…" : "Comment"}
+          </button>
+        </div>
       )}
     </div>
   );

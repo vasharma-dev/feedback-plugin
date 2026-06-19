@@ -566,6 +566,12 @@ async function main() {
   ok("timeline records created + assigned + status",
     ev.events.some((e) => e.kind === "created") && ev.events.some((e) => e.kind === "assigned") && ev.events.some((e) => e.kind === "status"));
 
+  // Comments: a member posts to the timeline; the owner sees it.
+  const cmt = await fetch(`${BASE}/v1/admin/feedback/${tfb.id}/comment`, { method: "POST", headers: { Cookie: memberC, "Content-Type": "application/json" }, body: JSON.stringify({ text: "Reproduced on Chrome — looking into it." }) });
+  const cmtBody = await cmt.json();
+  ok("member can comment on a bug (200)", cmt.status === 200 && cmtBody.events.some((e) => e.kind === "comment" && /Reproduced/.test(e.detail)));
+  ok("an empty comment is rejected (422)", (await fetch(`${BASE}/v1/admin/feedback/${tfb.id}/comment`, { method: "POST", headers: { Cookie: memberC, "Content-Type": "application/json" }, body: JSON.stringify({ text: "" }) })).status === 422);
+
   // --- summary ---
   console.log(`\n${fail === 0 ? "✅ ALL PASS" : "❌ FAILURES"} — ${pass} passed, ${fail} failed\n`);
   process.exit(fail === 0 ? 0 : 1);

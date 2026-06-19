@@ -401,6 +401,14 @@ export async function listFeedbackEvents(tenantId: string, feedbackId: string) {
   }));
 }
 
+/** Post a comment to a bug's timeline (any team member). Returns the refreshed timeline, or null. */
+export async function addComment(tenantId: string, feedbackId: string, actor: EventActor, text: string) {
+  const fb = await prisma.feedback.findFirst({ where: { id: feedbackId, tenantId }, select: { id: true } });
+  if (!fb) return null;
+  await logEvent({ feedbackId, tenantId, actorId: actor.id, actorName: actor.name, kind: "comment", detail: text.trim() });
+  return listFeedbackEvents(tenantId, feedbackId);
+}
+
 export interface FeedbackQuery {
   tenantId: string;
   projectId?: string;

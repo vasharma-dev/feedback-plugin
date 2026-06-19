@@ -5,6 +5,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { requireOwner, resolveTenant } from "../middleware/auth.js";
 import {
+  addComment,
   assignFeedback,
   getTenantKeys,
   inviteMember,
@@ -199,6 +200,21 @@ adminRouter.patch("/feedback/:id", async (req, res, next) => {
 adminRouter.get("/feedback/:id/events", async (req, res, next) => {
   try {
     const events = await listFeedbackEvents(req.tenantId!, req.params.id);
+    if (events === null) return res.status(404).json({ error: "not_found" });
+    res.json({ events });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const commentSchema = z.object({ text: z.string().min(1).max(1000) });
+
+// POST /v1/admin/feedback/:id/comment  { text } — any team member can comment.
+adminRouter.post("/feedback/:id/comment", async (req, res, next) => {
+  try {
+    const parsed = commentSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(422).json({ error: "validation_error" });
+    const events = await addComment(req.tenantId!, req.params.id, actorOf(req), parsed.data.text);
     if (events === null) return res.status(404).json({ error: "not_found" });
     res.json({ events });
   } catch (err) {

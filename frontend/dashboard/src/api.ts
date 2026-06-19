@@ -88,6 +88,16 @@ export function getEvents(key: string, id: string): Promise<FeedbackEvent[]> {
     .then((d) => d.events);
 }
 
+export function addComment(key: string, id: string, text: string): Promise<FeedbackEvent[]> {
+  return api(`/v1/admin/feedback/${id}/comment`, key, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  })
+    .then(json<{ events: FeedbackEvent[] }>)
+    .then((d) => d.events);
+}
+
 // ---- Team members (RBAC) ----
 export interface Member {
   id: string;
