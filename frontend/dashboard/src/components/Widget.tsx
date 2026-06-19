@@ -12,6 +12,8 @@ const DEFAULTS: WidgetTheme = {
   headerSubtitle: "We read every message — thank you for helping us improve.",
   dialogBg: "#ffffff",
   emailField: "optional",
+  nameField: "off",
+  phoneField: "off",
   hideBranding: false,
 };
 
@@ -211,27 +213,35 @@ function Editor({ apiKey, project }: { apiKey: string; project: Project }) {
           </div>
 
           <div>
-            <label className={label}>Reporter email field</label>
-            <div className="grid grid-cols-3 gap-2 max-w-[330px]">
-              {(["off", "optional", "required"] as const).map((opt) => (
-                <button
-                  key={opt}
-                  onClick={() => set("emailField", opt)}
-                  className={`py-2 rounded-xl text-xs font-medium border capitalize transition ${
-                    theme.emailField === opt ? "border-brand-400 bg-brand-50 text-brand-700 ring-2 ring-brand-100" : "border-slate-200 text-slate-600 hover:border-slate-300"
-                  }`}
-                >
-                  {opt}
-                </button>
+            <label className={label}>Reporter fields</label>
+            <p className="text-xs text-slate-400 mb-2 -mt-1">
+              What contact info the widget collects. <span className="font-medium">Off</span> hides it,{" "}
+              <span className="font-medium">Required</span> blocks submit until filled.
+            </p>
+            <div className="space-y-2">
+              {([
+                ["nameField", "Name"],
+                ["emailField", "Email"],
+                ["phoneField", "Phone"],
+              ] as const).map(([key, name]) => (
+                <div key={key} className="flex items-center gap-3">
+                  <span className="text-sm text-slate-600 w-14">{name}</span>
+                  <div className="grid grid-cols-3 gap-1.5 flex-1 max-w-[300px]">
+                    {(["off", "optional", "required"] as const).map((opt) => (
+                      <button
+                        key={opt}
+                        onClick={() => set(key, opt)}
+                        className={`py-1.5 rounded-lg text-xs font-medium border capitalize transition ${
+                          theme[key] === opt ? "border-brand-400 bg-brand-50 text-brand-700 ring-2 ring-brand-100" : "border-slate-200 text-slate-600 hover:border-slate-300"
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
-            <p className="text-xs text-slate-400 mt-1.5">
-              {theme.emailField === "off"
-                ? "The widget won't ask for an email."
-                : theme.emailField === "required"
-                ? "Reporters must enter their email to submit."
-                : "Reporters can optionally leave their email for follow-up."}
-            </p>
           </div>
 
           <div className="border-t border-slate-100 pt-4">
@@ -380,11 +390,17 @@ function Preview({ theme }: { theme: WidgetTheme }) {
             ))}
           </div>
           <div className="mt-2 h-12 rounded-lg border" style={{ borderColor: pal.chipBorder, background: pal.inputBg }} />
-          {theme.emailField !== "off" && (
-            <div className="mt-2 h-7 rounded-lg border flex items-center px-2 text-[10px]" style={{ borderColor: pal.chipBorder, background: pal.inputBg, color: pal.muted }}>
-              {theme.emailField === "required" ? "your email *" : "your email (optional)"}
-            </div>
-          )}
+          {([
+            ["nameField", "your name"],
+            ["emailField", "your email"],
+            ["phoneField", "your phone"],
+          ] as const)
+            .filter(([key]) => theme[key] !== "off")
+            .map(([key, ph]) => (
+              <div key={key} className="mt-2 h-7 rounded-lg border flex items-center px-2 text-[10px]" style={{ borderColor: pal.chipBorder, background: pal.inputBg, color: pal.muted }}>
+                {theme[key] === "required" ? `${ph} *` : `${ph} (optional)`}
+              </div>
+            ))}
           <div className="mt-2 text-center text-xs font-semibold rounded-lg py-2" style={{ background: theme.color, color: fgOn(theme.color) }}>
             Send feedback
           </div>

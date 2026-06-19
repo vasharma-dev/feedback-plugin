@@ -125,7 +125,7 @@ cd backend
 npm run smoke
 ```
 
-It runs 105 checks across the whole system (in the zero-setup fallback mode) — ingest, auth/trust separation, validation, spam
+It runs 107 checks across the whole system (in the zero-setup fallback mode) — ingest, auth/trust separation, validation, spam
 honeypot, admin stats/list/filter/patch, **signup, simulated payments (incl. declined cards),
 token balance + spend-per-feedback + buying token packs, multi-tenant isolation, per-project
 origin lock-down, widget theming/branding, simulated Google login → onboarding → session-based
@@ -133,7 +133,7 @@ dashboard**, and that the widget + signup + React dashboard are served — print
 and exiting non-zero on any failure. Expected:
 
 ```
-✅ ALL PASS — 105 passed, 0 failed
+✅ ALL PASS — 107 passed, 0 failed
 ```
 
 ## The three integration surfaces (DESIGN.md §2)

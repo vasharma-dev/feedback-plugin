@@ -65,7 +65,8 @@ export default function FeedbackCard({
   const m = item.metadata || {};
   const img = item.attachments[0];
   const type = TYPE_META[item.type] ?? { label: item.type, emoji: "•", cls: "bg-slate-100 text-slate-600 ring-slate-200" };
-  const who = item.endUser?.email || item.endUser?.id;
+  const eu = item.endUser || {};
+  const who = eu.name || eu.email || eu.id;
 
   const [showActivity, setShowActivity] = useState(false);
   const [events, setEvents] = useState<FeedbackEvent[] | null>(null);
@@ -196,6 +197,12 @@ export default function FeedbackCard({
             </span>
             {who}
           </span>
+        )}
+        {eu.email && eu.email !== who && (
+          <a href={`mailto:${eu.email}`} className="inline-flex items-center gap-1 text-slate-500 hover:text-brand-700">✉ {eu.email}</a>
+        )}
+        {eu.phone && (
+          <a href={`tel:${eu.phone}`} className="inline-flex items-center gap-1 text-slate-500 hover:text-brand-700">📞 {eu.phone}</a>
         )}
         {m.browser && m.browser !== "unknown" && <Meta>🌐 {m.browser}</Meta>}
         {m.os && m.os !== "unknown" && <Meta>🖥 {m.os}</Meta>}

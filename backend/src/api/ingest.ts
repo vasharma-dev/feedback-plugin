@@ -24,7 +24,12 @@ const feedbackSchema = z.object({
   // (a validation error would tell the bot it tripped a trap).
   _hp: z.string().optional(),
   endUser: z
-    .object({ id: z.string().max(200).optional(), email: z.string().email().optional() })
+    .object({
+      id: z.string().max(200).optional(),
+      email: z.string().email().optional(),
+      name: z.string().max(200).optional(),
+      phone: z.string().max(50).optional(),
+    })
     .nullable()
     .optional(),
   metadata: z.record(z.unknown()).optional(),

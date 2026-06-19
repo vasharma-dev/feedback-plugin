@@ -97,6 +97,8 @@
             headerSubtitle: "We read every message — thank you for helping us improve.",
             dialogBg: "#ffffff",
             emailField: "optional", // off | optional | required
+            nameField: "off",
+            phoneField: "off",
             hideBranding: false,
           },
           opts.theme || {}
@@ -204,23 +206,29 @@
       });
       this._textarea = textarea;
 
-      // Reporter email — per-org config: off | optional | required. Prefilled from SDK user.
-      var emailMode = this.cfg.theme.emailField || "optional";
-      var emailInput = null;
-      this._email = null;
-      if (emailMode !== "off") {
-        emailInput = el("input", {
-          "class": "jcm-ta", type: "email",
-          placeholder: emailMode === "required" ? "you@example.com" : "you@example.com (optional)",
-          autocomplete: "email", value: (this.cfg.user && this.cfg.user.email) || "",
+      // Reporter contact fields — each per-org config: off | optional | required. Prefilled from SDK user.
+      function mkField(mode, type, ph, ac, prefill) {
+        if (mode === "off") return null;
+        return el("input", {
+          "class": "jcm-ta", type: type, autocomplete: ac, value: prefill || "",
+          placeholder: mode === "required" ? ph : ph + " (optional)",
           style: {
             width: "100%", boxSizing: "border-box", padding: "11px 12px", marginTop: "2px",
             border: "1px solid " + pal.inputBorder, borderRadius: "10px", font: "14px " + FONT,
             color: pal.text, outline: "none", background: pal.inputBg,
           },
         });
-        this._email = emailInput;
       }
+      var u = this.cfg.user || {};
+      var nameMode = this.cfg.theme.nameField || "off";
+      var emailMode = this.cfg.theme.emailField || "optional";
+      var phoneMode = this.cfg.theme.phoneField || "off";
+      var nameInput = mkField(nameMode, "text", "Your name", "name", u.name);
+      var emailInput = mkField(emailMode, "email", "you@example.com", "email", u.email);
+      var phoneInput = mkField(phoneMode, "tel", "Phone number", "tel", u.phone);
+      this._name = nameInput;
+      this._email = emailInput;
+      this._phone = phoneInput;
 
       // Styled attach control hiding the native file input.
       var fileInput = el("input", { type: "file", accept: "image/*",
@@ -260,7 +268,9 @@
         label("What's this about?", pal), typeRow,
         label("How was your experience?", pal), stars,
         label("Your message", pal), textarea,
+        nameInput ? label(nameMode === "required" ? "Your name *" : "Your name", pal) : null, nameInput,
         emailInput ? label(emailMode === "required" ? "Your email *" : "Your email", pal) : null, emailInput,
+        phoneInput ? label(phoneMode === "required" ? "Your phone *" : "Your phone", pal) : null, phoneInput,
         label("Attachment", pal), attachLabel,
         honeypot, submit, status,
       ]);
@@ -356,23 +366,27 @@
         this._textarea.focus();
         return;
       }
-      // Email field is per-org: off (no field) | optional | required.
-      var emailMode = this.cfg.theme.emailField || "optional";
+      // Contact fields are each per-org: off (no field) | optional | required.
+      var t = this.cfg.theme;
+      var name = (this._name && this._name.value || "").trim();
       var email = (this._email && this._email.value || "").trim();
-      if (this._email && emailMode === "required" && !email) {
-        this._status.style.color = "#dc2626";
-        this._status.textContent = "Please enter your email.";
-        this._email.focus();
-        return;
-      }
+      var phone = (this._phone && this._phone.value || "").trim();
+      function fail(el, msg) { self._status.style.color = "#dc2626"; self._status.textContent = msg; if (el) el.focus(); }
+
+      if (this._name && t.nameField === "required" && !name) { fail(this._name, "Please enter your name."); return; }
+      if (this._email && t.emailField === "required" && !email) { fail(this._email, "Please enter your email."); return; }
       if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-        this._status.style.color = "#dc2626";
-        this._status.textContent = "Please enter a valid email" + (emailMode === "required" ? "." : " (or leave it blank).");
-        this._email.focus();
+        fail(this._email, "Please enter a valid email" + (t.emailField === "required" ? "." : " (or leave it blank)."));
         return;
       }
-      // Merge the typed email over any SDK-provided user context.
-      var endUser = email ? Object.assign({}, this.cfg.user, { email: email }) : this.cfg.user;
+      if (this._phone && t.phoneField === "required" && !phone) { fail(this._phone, "Please enter your phone number."); return; }
+
+      // Merge typed contact info over any SDK-provided user context.
+      var endUser = Object.assign({}, this.cfg.user);
+      if (name) endUser.name = name;
+      if (email) endUser.email = email;
+      if (phone) endUser.phone = phone;
+      if (!(endUser.id || endUser.email || endUser.name || endUser.phone)) endUser = null;
 
       this._submit_btn.disabled = true;
       this._submit_btn.textContent = "Sending…";

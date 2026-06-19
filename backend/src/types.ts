@@ -53,6 +53,8 @@ export interface WidgetTheme {
   headerSubtitle: string;
   dialogBg: string;
   emailField: string; // off | optional | required
+  nameField: string; // off | optional | required
+  phoneField: string; // off | optional | required
   hideBranding: boolean;
 }
 
@@ -110,7 +112,7 @@ export interface Feedback {
   status: FeedbackStatus;
   assigneeId: string | null; // team member working on it
   assigneeName?: string | null; // resolved display name (list view)
-  endUser: { id?: string; email?: string } | null;
+  endUser: { id?: string; email?: string; name?: string; phone?: string } | null;
   metadata: FeedbackMetadata;
   attachments: Attachment[];
   createdAt: string;

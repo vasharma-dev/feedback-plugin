@@ -50,6 +50,8 @@ type ProjectRow = {
   headerSubtitle: string;
   dialogBg: string;
   emailField: string;
+  nameField: string;
+  phoneField: string;
   hideBranding: boolean;
   feedbackPrefix: string;
   allowedOrigins: string;
@@ -71,6 +73,8 @@ function toProject(r: ProjectRow): Project {
         headerSubtitle: r.headerSubtitle,
         dialogBg: r.dialogBg,
         emailField: r.emailField,
+        nameField: r.nameField,
+        phoneField: r.phoneField,
         hideBranding: r.hideBranding,
       },
       allowedOrigins: JSON.parse(r.allowedOrigins) as string[],
@@ -264,6 +268,8 @@ export interface ProjectThemeInput {
   headerSubtitle?: string;
   dialogBg?: string;
   emailField?: string;
+  nameField?: string;
+  phoneField?: string;
   hideBranding?: boolean;
 }
 
@@ -285,6 +291,8 @@ export async function updateProjectTheme(
   if (theme.headerSubtitle !== undefined) data.headerSubtitle = theme.headerSubtitle;
   if (theme.dialogBg !== undefined) data.dialogBg = theme.dialogBg;
   if (theme.emailField !== undefined) data.emailField = theme.emailField;
+  if (theme.nameField !== undefined) data.nameField = theme.nameField;
+  if (theme.phoneField !== undefined) data.phoneField = theme.phoneField;
   if (theme.hideBranding !== undefined) data.hideBranding = theme.hideBranding;
   const res = await prisma.project.updateMany({ where: { id: projectId, tenantId }, data });
   if (res.count === 0) return undefined;
@@ -312,7 +320,7 @@ export interface CreateFeedbackInput {
   type: FeedbackType;
   message: string;
   rating: number | null;
-  endUser: { id?: string; email?: string } | null;
+  endUser: { id?: string; email?: string; name?: string; phone?: string } | null;
   metadata: Record<string, unknown>;
   attachments: Array<{ filename: string; mime: string; dataUrl: string }>;
 }

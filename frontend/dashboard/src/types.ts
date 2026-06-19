@@ -21,7 +21,7 @@ export interface Feedback {
   status: FeedbackStatus;
   assigneeId: string | null;
   assigneeName?: string | null;
-  endUser: { id?: string; email?: string } | null;
+  endUser: { id?: string; email?: string; name?: string; phone?: string } | null;
   metadata: Record<string, string>;
   attachments: Attachment[];
   createdAt: string;
@@ -43,6 +43,8 @@ export interface WidgetTheme {
   headerSubtitle: string;
   dialogBg: string;
   emailField: string; // off | optional | required
+  nameField: string;
+  phoneField: string;
   hideBranding: boolean;
 }
 

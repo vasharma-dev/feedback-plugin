@@ -72,6 +72,8 @@ const themeSchema = z
     headerSubtitle: z.string().max(160).optional(),
     dialogBg: z.string().regex(/^#[0-9a-fA-F]{6}$/, "dialogBg must be a #rrggbb hex").optional(),
     emailField: z.enum(["off", "optional", "required"]).optional(),
+    nameField: z.enum(["off", "optional", "required"]).optional(),
+    phoneField: z.enum(["off", "optional", "required"]).optional(),
     hideBranding: z.boolean().optional(),
   })
   .optional();

@@ -1,6 +1,8 @@
 export interface FeedbackUser {
   id?: string;
   email?: string;
+  name?: string;
+  phone?: string;
 }
 
 export interface FeedbackTheme {
@@ -12,6 +14,8 @@ export interface FeedbackTheme {
   headerSubtitle?: string;
   dialogBg?: string;
   emailField?: "off" | "optional" | "required";
+  nameField?: "off" | "optional" | "required";
+  phoneField?: "off" | "optional" | "required";
   hideBranding?: boolean;
 }
 

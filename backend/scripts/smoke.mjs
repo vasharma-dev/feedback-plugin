@@ -310,8 +310,18 @@ async function main() {
   ok("widget /v1/config serves the saved theme",
     cfg2.theme?.color === "#ff0066" && cfg2.theme?.dialogBg === "#101828" && cfg2.theme?.launcherText === "Tell us!" && cfg2.theme?.hideBranding === true);
   ok("widget config carries the email-field mode", cfg2.theme?.emailField === "required");
-  // reset email field so later submissions in this run don't require an email
-  await fetch(`${BASE}/v1/admin/projects/${freeProjectId}`, { method: "PATCH", headers: j(freeAcct.secretKey), body: JSON.stringify({ theme: { emailField: "optional" } }) });
+  // name + phone fields are configurable too, and a submission captures them.
+  await fetch(`${BASE}/v1/admin/projects/${freeProjectId}`, { method: "PATCH", headers: j(freeAcct.secretKey), body: JSON.stringify({ theme: { emailField: "optional", nameField: "required", phoneField: "optional" } }) });
+  const cfg3 = await (await fetch(`${BASE}/v1/config`, { headers: j(freeAcct.publicKey) })).json();
+  ok("widget config carries name + phone field modes", cfg3.theme?.nameField === "required" && cfg3.theme?.phoneField === "optional");
+  const withContact = await (await fetch(`${BASE}/v1/feedback`, {
+    method: "POST", headers: j(freeAcct.publicKey),
+    body: JSON.stringify({ type: "bug", message: "contact capture test", endUser: { name: "Jane Q", email: "jane@x.com", phone: "+1 555 0100" } }),
+  })).json();
+  const contactList = await (await fetch(`${BASE}/v1/admin/feedback?q=contact%20capture`, { headers: j(freeAcct.secretKey) })).json();
+  const ci = contactList.items.find((i) => i.id === withContact.id);
+  ok("name + email + phone are captured on feedback",
+    ci && ci.endUser?.name === "Jane Q" && ci.endUser?.email === "jane@x.com" && ci.endUser?.phone === "+1 555 0100");
 
   // Invalid theme values are rejected.
   const badTheme = await fetch(`${BASE}/v1/admin/projects/${freeProjectId}`, {
