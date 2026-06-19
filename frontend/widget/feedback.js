@@ -203,6 +203,18 @@
       });
       this._textarea = textarea;
 
+      // Reporter email — optional, so we can follow up. Prefilled if the SDK passed a user.
+      var emailInput = el("input", {
+        "class": "jcm-ta", type: "email", placeholder: "you@example.com (optional)",
+        autocomplete: "email", value: (this.cfg.user && this.cfg.user.email) || "",
+        style: {
+          width: "100%", boxSizing: "border-box", padding: "11px 12px", marginTop: "2px",
+          border: "1px solid " + pal.inputBorder, borderRadius: "10px", font: "14px " + FONT,
+          color: pal.text, outline: "none", background: pal.inputBg,
+        },
+      });
+      this._email = emailInput;
+
       // Styled attach control hiding the native file input.
       var fileInput = el("input", { type: "file", accept: "image/*",
         style: { display: "none" }, onchange: function (e) { self._onFile(e); } });
@@ -241,6 +253,7 @@
         label("What's this about?", pal), typeRow,
         label("How was your experience?", pal), stars,
         label("Your message", pal), textarea,
+        label("Your email", pal), emailInput,
         label("Attachment", pal), attachLabel,
         honeypot, submit, status,
       ]);
@@ -336,6 +349,17 @@
         this._textarea.focus();
         return;
       }
+      // Optional email — only validate if they typed one.
+      var email = (this._email && this._email.value || "").trim();
+      if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        this._status.style.color = "#dc2626";
+        this._status.textContent = "Please enter a valid email (or leave it blank).";
+        this._email.focus();
+        return;
+      }
+      // Merge the typed email over any SDK-provided user context.
+      var endUser = email ? Object.assign({}, this.cfg.user, { email: email }) : this.cfg.user;
+
       this._submit_btn.disabled = true;
       this._submit_btn.textContent = "Sending…";
       this._status.style.color = this._pal.muted;
@@ -346,7 +370,7 @@
         message: message,
         rating: s.rating || null,
         _hp: this._honeypot.value,
-        endUser: this.cfg.user,
+        endUser: endUser,
         metadata: captureMetadata(),
         attachments: s.attachment ? [s.attachment] : [],
       };
