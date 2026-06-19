@@ -82,6 +82,7 @@ model Project {
   headerTitle    String     @default("Share your feedback")
   headerSubtitle String     @default("We read every message — thank you for helping us improve.")
   dialogBg       String     @default("#ffffff") // background color of the feedback dialog
+  emailField     String     @default("optional") // off | optional | required — reporter email capture
   hideBranding   Boolean    @default(false) // white-label: drop "Powered by jicama"
   // Human-friendly feedback reference IDs, e.g. prefix "jicamabug" → jicamabug01, jicamabug02…
   feedbackPrefix String     @default("") // empty = no custom reference

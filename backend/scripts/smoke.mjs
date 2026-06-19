@@ -295,7 +295,7 @@ async function main() {
   // Update the theme via PATCH; the project echoes the new values back.
   const themePatch = await fetch(`${BASE}/v1/admin/projects/${freeProjectId}`, {
     method: "PATCH", headers: j(freeAcct.secretKey),
-    body: JSON.stringify({ theme: { color: "#ff0066", dialogBg: "#101828", launcherText: "Tell us!", headerTitle: "Got feedback?", hideBranding: true } }),
+    body: JSON.stringify({ theme: { color: "#ff0066", dialogBg: "#101828", launcherText: "Tell us!", headerTitle: "Got feedback?", emailField: "required", hideBranding: true } }),
   });
   const themed = await themePatch.json();
   ok("admin updates widget theme (200)", themePatch.status === 200, `got ${themePatch.status}`);
@@ -309,6 +309,9 @@ async function main() {
   const cfg2 = await (await fetch(`${BASE}/v1/config`, { headers: j(freeAcct.publicKey) })).json();
   ok("widget /v1/config serves the saved theme",
     cfg2.theme?.color === "#ff0066" && cfg2.theme?.dialogBg === "#101828" && cfg2.theme?.launcherText === "Tell us!" && cfg2.theme?.hideBranding === true);
+  ok("widget config carries the email-field mode", cfg2.theme?.emailField === "required");
+  // reset email field so later submissions in this run don't require an email
+  await fetch(`${BASE}/v1/admin/projects/${freeProjectId}`, { method: "PATCH", headers: j(freeAcct.secretKey), body: JSON.stringify({ theme: { emailField: "optional" } }) });
 
   // Invalid theme values are rejected.
   const badTheme = await fetch(`${BASE}/v1/admin/projects/${freeProjectId}`, {

@@ -42,6 +42,7 @@ export interface WidgetTheme {
   headerTitle: string;
   headerSubtitle: string;
   dialogBg: string;
+  emailField: string; // off | optional | required
   hideBranding: boolean;
 }
 

@@ -11,6 +11,7 @@ export interface FeedbackTheme {
   headerTitle?: string;
   headerSubtitle?: string;
   dialogBg?: string;
+  emailField?: "off" | "optional" | "required";
   hideBranding?: boolean;
 }
 

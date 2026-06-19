@@ -96,6 +96,7 @@
             headerTitle: "Share your feedback",
             headerSubtitle: "We read every message — thank you for helping us improve.",
             dialogBg: "#ffffff",
+            emailField: "optional", // off | optional | required
             hideBranding: false,
           },
           opts.theme || {}
@@ -203,17 +204,23 @@
       });
       this._textarea = textarea;
 
-      // Reporter email — optional, so we can follow up. Prefilled if the SDK passed a user.
-      var emailInput = el("input", {
-        "class": "jcm-ta", type: "email", placeholder: "you@example.com (optional)",
-        autocomplete: "email", value: (this.cfg.user && this.cfg.user.email) || "",
-        style: {
-          width: "100%", boxSizing: "border-box", padding: "11px 12px", marginTop: "2px",
-          border: "1px solid " + pal.inputBorder, borderRadius: "10px", font: "14px " + FONT,
-          color: pal.text, outline: "none", background: pal.inputBg,
-        },
-      });
-      this._email = emailInput;
+      // Reporter email — per-org config: off | optional | required. Prefilled from SDK user.
+      var emailMode = this.cfg.theme.emailField || "optional";
+      var emailInput = null;
+      this._email = null;
+      if (emailMode !== "off") {
+        emailInput = el("input", {
+          "class": "jcm-ta", type: "email",
+          placeholder: emailMode === "required" ? "you@example.com" : "you@example.com (optional)",
+          autocomplete: "email", value: (this.cfg.user && this.cfg.user.email) || "",
+          style: {
+            width: "100%", boxSizing: "border-box", padding: "11px 12px", marginTop: "2px",
+            border: "1px solid " + pal.inputBorder, borderRadius: "10px", font: "14px " + FONT,
+            color: pal.text, outline: "none", background: pal.inputBg,
+          },
+        });
+        this._email = emailInput;
+      }
 
       // Styled attach control hiding the native file input.
       var fileInput = el("input", { type: "file", accept: "image/*",
@@ -253,7 +260,7 @@
         label("What's this about?", pal), typeRow,
         label("How was your experience?", pal), stars,
         label("Your message", pal), textarea,
-        label("Your email", pal), emailInput,
+        emailInput ? label(emailMode === "required" ? "Your email *" : "Your email", pal) : null, emailInput,
         label("Attachment", pal), attachLabel,
         honeypot, submit, status,
       ]);
@@ -349,11 +356,18 @@
         this._textarea.focus();
         return;
       }
-      // Optional email — only validate if they typed one.
+      // Email field is per-org: off (no field) | optional | required.
+      var emailMode = this.cfg.theme.emailField || "optional";
       var email = (this._email && this._email.value || "").trim();
+      if (this._email && emailMode === "required" && !email) {
+        this._status.style.color = "#dc2626";
+        this._status.textContent = "Please enter your email.";
+        this._email.focus();
+        return;
+      }
       if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
         this._status.style.color = "#dc2626";
-        this._status.textContent = "Please enter a valid email (or leave it blank).";
+        this._status.textContent = "Please enter a valid email" + (emailMode === "required" ? "." : " (or leave it blank).");
         this._email.focus();
         return;
       }
