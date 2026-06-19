@@ -3,21 +3,30 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { resolveTenant } from "../middleware/auth.js";
+import { requireOwner, resolveTenant } from "../middleware/auth.js";
 import {
+  assignFeedback,
   getTenantKeys,
+  inviteMember,
+  listFeedbackEvents,
+  listMembers,
   listProjectsWithKeys,
   queryFeedback,
+  removeMember,
   statsFor,
   updateFeedbackStatus,
   updateProjectOrigins,
   updateProjectPrefix,
   updateProjectTheme,
 } from "../store.js";
+import { BillingError } from "../store.js";
 
 export const adminRouter = Router();
 
 adminRouter.use(resolveTenant);
+
+// Actor for timeline events from the current request.
+const actorOf = (req: import("express").Request) => ({ id: req.userId ?? null, name: req.userName || "API" });
 
 // GET /v1/admin/projects
 adminRouter.get("/projects", async (req, res, next) => {
@@ -72,9 +81,9 @@ const projectPatchSchema = z.object({
   feedbackPrefix: z.string().regex(/^[A-Za-z0-9_-]*$/, "prefix can use letters, numbers, _ and -").max(20).optional(),
 });
 
-// PATCH /v1/admin/projects/:id  { allowedOrigins?: string[], theme?: {...} }
+// PATCH /v1/admin/projects/:id  { allowedOrigins?: string[], theme?: {...} } — OWNER ONLY.
 // Lock the public key to specific origins, and/or update the widget theme/branding.
-adminRouter.patch("/projects/:id", async (req, res, next) => {
+adminRouter.patch("/projects/:id", requireOwner, async (req, res, next) => {
   try {
     const parsed = projectPatchSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -155,22 +164,78 @@ adminRouter.get("/feedback", async (req, res, next) => {
 });
 
 const patchSchema = z.object({
-  status: z.enum(["new", "in_progress", "done", "wont_do"]),
+  status: z.enum(["new", "in_progress", "done", "wont_do"]).optional(),
+  assigneeId: z.string().nullable().optional(), // null = unassign; "me" = current user
 });
 
-// PATCH /v1/admin/feedback/:id  { status }
+// PATCH /v1/admin/feedback/:id  { status?, assigneeId? } — any team member can triage/take.
 adminRouter.patch("/feedback/:id", async (req, res, next) => {
   try {
     const parsed = patchSchema.safeParse(req.body);
     if (!parsed.success) return res.status(422).json({ error: "validation_error" });
-    const updated = await updateFeedbackStatus(
-      req.tenantId!,
-      req.params.id,
-      parsed.data.status
-    );
-    if (!updated) return res.status(404).json({ error: "not_found" });
+    const { status, assigneeId } = parsed.data;
+    if (status === undefined && assigneeId === undefined) {
+      return res.status(422).json({ error: "nothing_to_update" });
+    }
+    const actor = actorOf(req);
+    let updated;
+    if (assigneeId !== undefined) {
+      const who = assigneeId === "me" ? req.userId ?? null : assigneeId;
+      updated = await assignFeedback(req.tenantId!, req.params.id, who, actor);
+      if (!updated) return res.status(404).json({ error: "not_found" });
+    }
+    if (status !== undefined) {
+      updated = await updateFeedbackStatus(req.tenantId!, req.params.id, status, actor);
+      if (!updated) return res.status(404).json({ error: "not_found" });
+    }
     res.json(updated);
   } catch (err) {
+    if (err instanceof BillingError) return res.status(err.status).json({ error: err.code, message: err.message });
+    next(err);
+  }
+});
+
+// GET /v1/admin/feedback/:id/events — the bug's activity timeline.
+adminRouter.get("/feedback/:id/events", async (req, res, next) => {
+  try {
+    const events = await listFeedbackEvents(req.tenantId!, req.params.id);
+    if (events === null) return res.status(404).json({ error: "not_found" });
+    res.json({ events });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---- Team members (RBAC) — owner only ----
+adminRouter.get("/members", requireOwner, async (req, res, next) => {
+  try {
+    res.json({ members: await listMembers(req.tenantId!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const inviteSchema = z.object({ email: z.string().email(), role: z.enum(["member", "owner"]).optional() });
+
+adminRouter.post("/members", requireOwner, async (req, res, next) => {
+  try {
+    const parsed = inviteSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(422).json({ error: "validation_error" });
+    const member = await inviteMember(req.tenantId!, parsed.data.email, parsed.data.role ?? "member");
+    res.status(201).json(member);
+  } catch (err) {
+    if (err instanceof BillingError) return res.status(err.status).json({ error: err.code, message: err.message });
+    next(err);
+  }
+});
+
+adminRouter.delete("/members/:id", requireOwner, async (req, res, next) => {
+  try {
+    const ok = await removeMember(req.tenantId!, req.params.id);
+    if (!ok) return res.status(404).json({ error: "not_found" });
+    res.json({ ok: true });
+  } catch (err) {
+    if (err instanceof BillingError) return res.status(err.status).json({ error: err.code, message: err.message });
     next(err);
   }
 });

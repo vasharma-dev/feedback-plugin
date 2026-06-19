@@ -1,6 +1,16 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { getEvents, type FeedbackEvent } from "../api";
 import { fullTime, initials, relativeTime } from "../lib/format";
 import type { Feedback, FeedbackStatus } from "../types";
+
+const EVENT_ICON: Record<string, string> = { created: "📥", status: "🏷️", assigned: "🙋", unassigned: "↩️", comment: "💬" };
+function eventText(e: FeedbackEvent): string {
+  if (e.kind === "created") return "reported this";
+  if (e.kind === "status") return `set status to ${e.detail.replace("_", " ")}`;
+  if (e.kind === "assigned") return `took this${e.detail ? ` (→ ${e.detail})` : ""}`;
+  if (e.kind === "unassigned") return "unassigned this";
+  return e.detail;
+}
 
 const TYPE_META: Record<string, { label: string; cls: string; emoji: string }> = {
   bug: { label: "Bug", emoji: "🐞", cls: "bg-red-50 text-red-700 ring-red-200" },
@@ -43,15 +53,27 @@ function Meta({ children }: { children: ReactNode }) {
 
 export default function FeedbackCard({
   item,
+  apiKey,
   onStatus,
+  onTake,
 }: {
   item: Feedback;
+  apiKey: string;
   onStatus: (id: string, status: FeedbackStatus) => void;
+  onTake: (id: string) => void;
 }) {
   const m = item.metadata || {};
   const img = item.attachments[0];
   const type = TYPE_META[item.type] ?? { label: item.type, emoji: "•", cls: "bg-slate-100 text-slate-600 ring-slate-200" };
   const who = item.endUser?.email || item.endUser?.id;
+
+  const [showActivity, setShowActivity] = useState(false);
+  const [events, setEvents] = useState<FeedbackEvent[] | null>(null);
+  function toggleActivity() {
+    const next = !showActivity;
+    setShowActivity(next);
+    if (next && !events) getEvents(apiKey, item.id).then(setEvents).catch(() => setEvents([]));
+  }
 
   return (
     <div className="group bg-white rounded-2xl border border-slate-200/70 shadow-card hover:shadow-cardHover transition-shadow p-4 animate-fadeInUp">
@@ -86,7 +108,24 @@ export default function FeedbackCard({
           {relativeTime(item.createdAt)}
         </span>
 
-        <div className="ml-auto relative">
+        <div className="ml-auto flex items-center gap-2">
+          {item.assigneeName ? (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600" title={`Assigned to ${item.assigneeName}`}>
+              <span className="w-5 h-5 rounded-full bg-brand-100 text-brand-700 grid place-items-center text-[10px] font-semibold">
+                {initials(item.assigneeName)}
+              </span>
+              {item.assigneeName}
+            </span>
+          ) : (
+            <button
+              onClick={() => onTake(item.id)}
+              className="text-xs font-semibold text-brand-700 border border-brand-200 hover:bg-brand-50 rounded-full px-3 py-1.5 transition"
+              title="Assign to me and mark in progress"
+            >
+              Take
+            </button>
+          )}
+          <div className="relative">
           <select
             className={`appearance-none text-xs font-medium rounded-full ring-1 ring-inset pl-3 pr-7 py-1.5
               cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-300 transition ${STATUS_PILL[item.status]}`}
@@ -109,6 +148,7 @@ export default function FeedbackCard({
           >
             <path d="m6 9 6 6 6-6" />
           </svg>
+          </div>
         </div>
       </div>
 
@@ -156,6 +196,31 @@ export default function FeedbackCard({
           </a>
         )}
       </div>
+
+      {/* activity timeline */}
+      <button
+        onClick={toggleActivity}
+        className="mt-2 text-xs font-medium text-slate-500 hover:text-slate-800 inline-flex items-center gap-1"
+      >
+        <span className={`transition-transform ${showActivity ? "rotate-90" : ""}`}>▸</span> Activity
+      </button>
+      {showActivity && (
+        <ol className="mt-2 pl-1 space-y-2 border-l-2 border-slate-100">
+          {!events ? (
+            <li className="text-xs text-slate-400 pl-3">Loading…</li>
+          ) : events.length === 0 ? (
+            <li className="text-xs text-slate-400 pl-3">No activity yet.</li>
+          ) : (
+            events.map((e) => (
+              <li key={e.id} className="relative pl-4 text-xs text-slate-600">
+                <span className="absolute -left-[7px] top-0.5 text-[10px]">{EVENT_ICON[e.kind] || "•"}</span>
+                <span className="font-medium text-slate-700">{e.actorName}</span> {eventText(e)}
+                <span className="text-slate-400" title={fullTime(e.createdAt)}> · {relativeTime(e.createdAt)}</span>
+              </li>
+            ))
+          )}
+        </ol>
+      )}
     </div>
   );
 }

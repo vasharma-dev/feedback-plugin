@@ -156,6 +156,7 @@ type FeedbackRow = {
   message: string;
   rating: number | null;
   status: string;
+  assigneeId: string | null;
   endUser: string | null;
   metadata: string;
   createdAt: Date;
@@ -175,6 +176,7 @@ function toFeedback(r: FeedbackRow): Feedback {
     message: r.message,
     rating: r.rating,
     status: r.status as FeedbackStatus,
+    assigneeId: r.assigneeId,
     endUser: r.endUser ? JSON.parse(r.endUser) : null,
     metadata: JSON.parse(r.metadata),
     attachments: r.attachments.map((a) => ({
@@ -348,7 +350,55 @@ export async function createFeedback(input: CreateFeedbackInput): Promise<Feedba
     },
     include: { attachments: true },
   });
+  await logEvent({
+    feedbackId: row.id,
+    tenantId: input.tenantId,
+    actorId: null,
+    actorName: input.endUser?.email || "Reporter",
+    kind: "created",
+    detail: input.type,
+  });
   return toFeedback(row);
+}
+
+// ---- Timeline events ----
+export interface EventActor {
+  id: string | null;
+  name: string;
+}
+
+export async function logEvent(opts: {
+  feedbackId: string;
+  tenantId: string;
+  actorId: string | null;
+  actorName: string;
+  kind: "created" | "status" | "assigned" | "unassigned" | "comment";
+  detail?: string;
+}): Promise<void> {
+  await prisma.feedbackEvent.create({
+    data: {
+      id: `evt_${nanoid(12)}`,
+      feedbackId: opts.feedbackId,
+      tenantId: opts.tenantId,
+      actorId: opts.actorId,
+      actorName: opts.actorName,
+      kind: opts.kind,
+      detail: opts.detail ?? "",
+    },
+  });
+}
+
+export async function listFeedbackEvents(tenantId: string, feedbackId: string) {
+  const fb = await prisma.feedback.findFirst({ where: { id: feedbackId, tenantId }, select: { id: true } });
+  if (!fb) return null; // not this tenant's
+  const rows = await prisma.feedbackEvent.findMany({ where: { feedbackId, tenantId }, orderBy: { createdAt: "asc" } });
+  return rows.map((e) => ({
+    id: e.id,
+    actorName: e.actorName,
+    kind: e.kind,
+    detail: e.detail,
+    createdAt: e.createdAt.toISOString(),
+  }));
 }
 
 export interface FeedbackQuery {
@@ -379,7 +429,54 @@ export async function queryFeedback(query: FeedbackQuery): Promise<Feedback[]> {
   });
   const dupes: Record<string, number> = {};
   for (const g of groups) if (g.groupId) dupes[g.groupId] = g._count._all;
-  return rows.map((r) => ({ ...toFeedback(r), similarCount: dupes[r.id] ?? 0 }));
+  // Resolve assignee display names.
+  const members = await prisma.user.findMany({ where: { tenantId: query.tenantId }, select: { id: true, name: true, email: true } });
+  const nameById: Record<string, string> = {};
+  for (const m of members) nameById[m.id] = m.name || m.email;
+  return rows.map((r) => ({
+    ...toFeedback(r),
+    similarCount: dupes[r.id] ?? 0,
+    assigneeName: r.assigneeId ? nameById[r.assigneeId] ?? null : null,
+  }));
+}
+
+/** A single feedback (tenant-scoped) with attachments + resolved assignee name. */
+export async function getFeedback(tenantId: string, id: string): Promise<Feedback | undefined> {
+  const row = await prisma.feedback.findFirst({ where: { id, tenantId }, include: { attachments: true } });
+  if (!row) return undefined;
+  let assigneeName: string | null = null;
+  if (row.assigneeId) {
+    const u = await prisma.user.findFirst({ where: { id: row.assigneeId, tenantId }, select: { name: true, email: true } });
+    assigneeName = u ? u.name || u.email : null;
+  }
+  return { ...toFeedback(row), assigneeName };
+}
+
+/** Assign (or unassign, with null) a feedback to a team member + log the timeline event. */
+export async function assignFeedback(
+  tenantId: string,
+  id: string,
+  assigneeId: string | null,
+  actor: EventActor
+): Promise<Feedback | undefined> {
+  const fb = await prisma.feedback.findFirst({ where: { id, tenantId } });
+  if (!fb) return undefined;
+  let assigneeName = "";
+  if (assigneeId) {
+    const u = await prisma.user.findFirst({ where: { id: assigneeId, tenantId } });
+    if (!u) throw new BillingError(404, "assignee_not_found", "That team member isn't in this org.");
+    assigneeName = u.name || u.email;
+  }
+  await prisma.feedback.update({ where: { id }, data: { assigneeId } });
+  await logEvent({
+    feedbackId: id,
+    tenantId,
+    actorId: actor.id,
+    actorName: actor.name,
+    kind: assigneeId ? "assigned" : "unassigned",
+    detail: assigneeName,
+  });
+  return getFeedback(tenantId, id);
 }
 
 /**
@@ -418,13 +515,16 @@ export async function analyzeAndGroupFeedback(id: string): Promise<Feedback | un
 export async function updateFeedbackStatus(
   tenantId: string,
   id: string,
-  status: FeedbackStatus
+  status: FeedbackStatus,
+  actor?: EventActor
 ): Promise<Feedback | undefined> {
   // updateMany scoped by tenantId enforces isolation — a wrong tenant updates 0 rows.
   const res = await prisma.feedback.updateMany({ where: { id, tenantId }, data: { status } });
   if (res.count === 0) return undefined;
-  const row = await prisma.feedback.findUnique({ where: { id }, include: { attachments: true } });
-  return row ? toFeedback(row) : undefined;
+  if (actor) {
+    await logEvent({ feedbackId: id, tenantId, actorId: actor.id, actorName: actor.name, kind: "status", detail: status });
+  }
+  return getFeedback(tenantId, id);
 }
 
 export async function statsFor(tenantId: string) {
@@ -869,6 +969,7 @@ export interface AppUser {
   avatarUrl: string | null;
   googleId: string | null;
   tenantId: string | null;
+  role: string; // owner | member
 }
 
 const SESSION_TTL_DAYS = 30;
@@ -955,8 +1056,57 @@ export async function onboardUser(
     billingEmail: user.email,
     plan: "free",
   });
-  await prisma.user.update({ where: { id: userId }, data: { tenantId: account.tenant.id } });
+  await prisma.user.update({ where: { id: userId }, data: { tenantId: account.tenant.id, role: "owner" } });
   return account;
+}
+
+// ====================================================================================
+// Team members & RBAC (the owner invites employees; they sign in with Google)
+// ====================================================================================
+export interface Member {
+  id: string;
+  email: string;
+  name: string | null;
+  avatarUrl: string | null;
+  role: string;
+  joined: boolean; // has actually signed in (has a googleId) vs invite-pending
+}
+
+function toMember(u: { id: string; email: string; name: string | null; avatarUrl: string | null; role: string; googleId: string | null }): Member {
+  return { id: u.id, email: u.email, name: u.name, avatarUrl: u.avatarUrl, role: u.role, joined: !!u.googleId };
+}
+
+export async function listMembers(tenantId: string): Promise<Member[]> {
+  const rows = await prisma.user.findMany({ where: { tenantId }, orderBy: { createdAt: "asc" } });
+  return rows.map(toMember);
+}
+
+/**
+ * Invite an employee by email. Pre-creates (or attaches) a User on this org with role "member";
+ * when they sign in with Google we match by email and drop them straight into the dashboard.
+ */
+export async function inviteMember(tenantId: string, email: string, role: "member" | "owner" = "member"): Promise<Member> {
+  const e = email.trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) throw new BillingError(422, "email_invalid", "Enter a valid email.");
+  const existing = await prisma.user.findUnique({ where: { email: e } });
+  if (existing) {
+    if (existing.tenantId && existing.tenantId !== tenantId) {
+      throw new BillingError(409, "email_in_other_org", "That email already belongs to another organization.");
+    }
+    const u = await prisma.user.update({ where: { id: existing.id }, data: { tenantId, role: existing.role === "owner" && existing.tenantId === tenantId ? "owner" : role } });
+    return toMember(u);
+  }
+  const u = await prisma.user.create({ data: { id: `usr_${nanoid(12)}`, email: e, role, tenantId } });
+  return toMember(u);
+}
+
+export async function removeMember(tenantId: string, userId: string): Promise<boolean> {
+  const u = await prisma.user.findFirst({ where: { id: userId, tenantId } });
+  if (!u) return false;
+  if (u.role === "owner") throw new BillingError(400, "cannot_remove_owner", "You can't remove an owner.");
+  await prisma.session.deleteMany({ where: { userId } }); // revoke access immediately
+  await prisma.user.update({ where: { id: userId }, data: { tenantId: null, role: "owner" } });
+  return true;
 }
 
 // ====================================================================================

@@ -119,6 +119,7 @@ accountRouter.get("/me", async (req, res, next) => {
     }
     res.json({
       user: { email: user.email, name: user.name, avatarUrl: user.avatarUrl },
+      role: user.role,
       onboarded: !!user.tenantId,
       tenant,
       keys,

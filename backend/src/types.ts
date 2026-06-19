@@ -107,6 +107,8 @@ export interface Feedback {
   message: string;
   rating: number | null; // 1..5
   status: FeedbackStatus;
+  assigneeId: string | null; // team member working on it
+  assigneeName?: string | null; // resolved display name (list view)
   endUser: { id?: string; email?: string } | null;
   metadata: FeedbackMetadata;
   attachments: Attachment[];

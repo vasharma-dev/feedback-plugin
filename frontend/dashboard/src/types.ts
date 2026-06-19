@@ -19,6 +19,8 @@ export interface Feedback {
   message: string;
   rating: number | null;
   status: FeedbackStatus;
+  assigneeId: string | null;
+  assigneeName?: string | null;
   endUser: { id?: string; email?: string } | null;
   metadata: Record<string, string>;
   attachments: Attachment[];

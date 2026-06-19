@@ -521,6 +521,51 @@ async function main() {
     ok("dashboard JS bundle served (200)", false, "no asset found — run `npm run build` in frontend/dashboard");
   }
 
+  // ====================================================================================
+  // Team / RBAC + bug timeline
+  // ====================================================================================
+  const login = async (email) =>
+    (
+      (await fetch(`${BASE}/auth/google/callback`, {
+        method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ email, name: email.split("@")[0] }).toString(), redirect: "manual",
+      })).headers.get("set-cookie")?.match(/jicama_sess=[^;]+/) || [""]
+    )[0];
+
+  const ownerEmail = `team_owner_${Date.now()}@smoke.test`;
+  const ownerC = await login(ownerEmail);
+  await fetch(`${BASE}/v1/onboarding`, { method: "POST", headers: { Cookie: ownerC, "Content-Type": "application/json" }, body: JSON.stringify({ company: "TeamCo", website: "https://team.test" }) });
+  const ownerMe = await (await fetch(`${BASE}/v1/me`, { headers: { Cookie: ownerC } })).json();
+  ok("owner account has role owner", ownerMe.role === "owner");
+  const ownerPk = ownerMe.keys.publicKey;
+  const projs = await (await fetch(`${BASE}/v1/admin/projects`, { headers: { Cookie: ownerC } })).json();
+  const teamProjId = projs.projects[0].id;
+  const tfb = await (await fetch(`${BASE}/v1/feedback`, { method: "POST", headers: j(ownerPk), body: JSON.stringify({ type: "bug", message: "Login page crashes on submit" }) })).json();
+
+  const memberEmail = `team_member_${Date.now()}@smoke.test`;
+  const invRes = await fetch(`${BASE}/v1/admin/members`, { method: "POST", headers: { Cookie: ownerC, "Content-Type": "application/json" }, body: JSON.stringify({ email: memberEmail }) });
+  const member = await invRes.json();
+  ok("owner invites a teammate (201, member role)", invRes.status === 201 && member.role === "member");
+  const mlist = await (await fetch(`${BASE}/v1/admin/members`, { headers: { Cookie: ownerC } })).json();
+  ok("members list shows owner + member", Array.isArray(mlist.members) && mlist.members.length >= 2);
+
+  const memberC = await login(memberEmail);
+  const memberMe = await (await fetch(`${BASE}/v1/me`, { headers: { Cookie: memberC } })).json();
+  ok("invited teammate joins as a member", memberMe.role === "member" && memberMe.tenant?.name === "TeamCo");
+
+  // RBAC: member sees the inbox but not owner-only areas.
+  ok("member can read the feedback inbox (200)", (await fetch(`${BASE}/v1/admin/feedback`, { headers: { Cookie: memberC } })).status === 200);
+  ok("member CANNOT edit the widget/project (403)", (await fetch(`${BASE}/v1/admin/projects/${teamProjId}`, { method: "PATCH", headers: { Cookie: memberC, "Content-Type": "application/json" }, body: JSON.stringify({ feedbackPrefix: "x" }) })).status === 403);
+  ok("member CANNOT access billing (403)", (await fetch(`${BASE}/v1/admin/billing`, { headers: { Cookie: memberC } })).status === 403);
+
+  // The member takes the bug → assigned + in progress; the whole team sees the timeline.
+  const take = await fetch(`${BASE}/v1/admin/feedback/${tfb.id}`, { method: "PATCH", headers: { Cookie: memberC, "Content-Type": "application/json" }, body: JSON.stringify({ assigneeId: "me", status: "in_progress" }) });
+  const taken = await take.json();
+  ok("member can take a bug (assigned + in progress)", take.status === 200 && !!taken.assigneeName && taken.status === "in_progress");
+  const ev = await (await fetch(`${BASE}/v1/admin/feedback/${tfb.id}/events`, { headers: { Cookie: ownerC } })).json();
+  ok("timeline records created + assigned + status",
+    ev.events.some((e) => e.kind === "created") && ev.events.some((e) => e.kind === "assigned") && ev.events.some((e) => e.kind === "status"));
+
   // --- summary ---
   console.log(`\n${fail === 0 ? "✅ ALL PASS" : "❌ FAILURES"} — ${pass} passed, ${fail} failed\n`);
   process.exit(fail === 0 ? 0 : 1);

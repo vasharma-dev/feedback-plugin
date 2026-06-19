@@ -26,6 +26,7 @@ function api(path: string, key: string, init: RequestInit = {}): Promise<Respons
 // ---- Session / account (Google sign-in) ----
 export interface Me {
   user: { email: string; name: string | null; avatarUrl: string | null };
+  role: string; // owner | member
   onboarded: boolean;
   tenant: { id: string; name: string; plan: string } | null;
   keys: { publicKey: string | null; secretKey: string | null } | null;
@@ -56,12 +57,63 @@ export async function listFeedback(key: string, f: Filters): Promise<Feedback[]>
   return data.items;
 }
 
-export function patchStatus(key: string, id: string, status: FeedbackStatus): Promise<Feedback> {
+export function patchFeedback(
+  key: string,
+  id: string,
+  body: { status?: FeedbackStatus; assigneeId?: string | null }
+): Promise<Feedback> {
   return api(`/v1/admin/feedback/${id}`, key, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status }),
+    body: JSON.stringify(body),
   }).then(json<Feedback>);
+}
+
+export function patchStatus(key: string, id: string, status: FeedbackStatus): Promise<Feedback> {
+  return patchFeedback(key, id, { status });
+}
+
+// ---- Timeline events ----
+export interface FeedbackEvent {
+  id: string;
+  actorName: string;
+  kind: string;
+  detail: string;
+  createdAt: string;
+}
+
+export function getEvents(key: string, id: string): Promise<FeedbackEvent[]> {
+  return api(`/v1/admin/feedback/${id}/events`, key)
+    .then(json<{ events: FeedbackEvent[] }>)
+    .then((d) => d.events);
+}
+
+// ---- Team members (RBAC) ----
+export interface Member {
+  id: string;
+  email: string;
+  name: string | null;
+  avatarUrl: string | null;
+  role: string;
+  joined: boolean;
+}
+
+export function getMembers(key: string): Promise<Member[]> {
+  return api("/v1/admin/members", key)
+    .then(json<{ members: Member[] }>)
+    .then((d) => d.members);
+}
+
+export function inviteMember(key: string, email: string, role = "member"): Promise<Member> {
+  return api("/v1/admin/members", key, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, role }),
+  }).then(json<Member>);
+}
+
+export function removeMember(key: string, id: string): Promise<{ ok: boolean }> {
+  return api(`/v1/admin/members/${id}`, key, { method: "DELETE" }).then(json<{ ok: boolean }>);
 }
 
 // ---- Keys ----

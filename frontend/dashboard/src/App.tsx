@@ -9,11 +9,13 @@ import {
   type Filters,
   type Me,
 } from "./api";
+import { patchFeedback } from "./api";
 import Billing from "./components/Billing";
 import FeedbackCard from "./components/FeedbackCard";
 import FiltersBar from "./components/Filters";
 import Settings from "./components/Settings";
 import StatsBar from "./components/StatsBar";
+import Team from "./components/Team";
 import Widget from "./components/Widget";
 import { InboxIcon, SettingsIcon } from "./components/icons";
 import type { Feedback, FeedbackStatus, Stats } from "./types";
@@ -32,14 +34,18 @@ function initialKey(): string {
   return localStorage.getItem("jicama_key") || DEFAULT_KEY;
 }
 
-type Tab = "inbox" | "widget" | "billing" | "settings";
+type Tab = "inbox" | "widget" | "billing" | "settings" | "team";
 
 const TAB_LABELS: Record<Tab, string> = {
   inbox: "Feedback inbox",
   widget: "Widget",
   billing: "Billing & plan",
   settings: "Settings",
+  team: "Team",
 };
+
+const OWNER_TABS: Tab[] = ["inbox", "widget", "billing", "settings", "team"];
+const MEMBER_TABS: Tab[] = ["inbox"]; // employees: feedback only
 
 export default function App() {
   const [key, setKey] = useState(initialKey);
@@ -137,10 +143,25 @@ export default function App() {
     }
   }
 
+  // "Take" a bug: assign to me + mark in progress, so the whole team sees who's on it.
+  async function onTake(id: string) {
+    try {
+      await patchFeedback(keyRef.current, id, { assigneeId: "me", status: "in_progress" });
+      refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   async function onLogout() {
     await logout();
     window.location.href = "/"; // back to the landing page
   }
+
+  // Role-based tabs: owners get everything, members (employees) just the inbox.
+  const isOwner = session ? session.role === "owner" : true; // legacy key mode = owner
+  const tabs = isOwner ? OWNER_TABS : MEMBER_TABS;
+  const activeTab = tabs.includes(tab) ? tab : "inbox";
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
@@ -239,12 +260,12 @@ export default function App() {
 
         {/* tabs */}
         <div className="max-w-5xl mx-auto px-5 flex gap-1 -mb-px">
-          {(["inbox", "widget", "billing", "settings"] as Tab[]).map((t) => (
+          {tabs.map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`px-4 py-2.5 text-sm font-medium border-b-2 transition ${
-                tab === t
+                activeTab === t
                   ? "border-brand-600 text-brand-700"
                   : "border-transparent text-slate-500 hover:text-slate-800"
               }`}
@@ -256,14 +277,14 @@ export default function App() {
       </header>
 
       <main className="max-w-5xl mx-auto px-5 py-6">
-        {error && tab === "inbox" && (
+        {error && activeTab === "inbox" && (
           <div className="text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 text-sm flex items-center gap-2">
             <span>⚠</span>
             <span>{error}</span>
           </div>
         )}
 
-        {tab === "widget" ? (
+        {activeTab === "widget" ? (
           <>
             <div className="mb-5">
               <h1 className="text-xl font-bold text-slate-900 tracking-tight">Widget</h1>
@@ -273,7 +294,7 @@ export default function App() {
             </div>
             <Widget apiKey={key} />
           </>
-        ) : tab === "billing" ? (
+        ) : activeTab === "billing" ? (
           <>
             <div className="mb-5">
               <h1 className="text-xl font-bold text-slate-900 tracking-tight">Billing &amp; plan</h1>
@@ -281,7 +302,7 @@ export default function App() {
             </div>
             <Billing apiKey={key} />
           </>
-        ) : tab === "settings" ? (
+        ) : activeTab === "settings" ? (
           <>
             <div className="mb-5">
               <h1 className="text-xl font-bold text-slate-900 tracking-tight">Settings</h1>
@@ -290,6 +311,16 @@ export default function App() {
               </p>
             </div>
             <Settings apiKey={key} />
+          </>
+        ) : activeTab === "team" ? (
+          <>
+            <div className="mb-5">
+              <h1 className="text-xl font-bold text-slate-900 tracking-tight">Team</h1>
+              <p className="text-sm text-slate-500 mt-0.5">
+                Invite teammates to triage and take feedback. Owners manage billing, widget &amp; settings.
+              </p>
+            </div>
+            <Team apiKey={key} />
           </>
         ) : (
           <>
@@ -310,7 +341,7 @@ export default function App() {
             ) : (
               <div className="space-y-3">
                 {items.map((f) => (
-                  <FeedbackCard key={f.id} item={f} onStatus={onStatus} />
+                  <FeedbackCard key={f.id} item={f} apiKey={key} onStatus={onStatus} onTake={onTake} />
                 ))}
               </div>
             )}

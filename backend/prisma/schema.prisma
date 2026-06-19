@@ -51,6 +51,7 @@ model User {
   avatarUrl String?
   googleId  String?  @unique // the Google "sub"; mocked in the prototype
   tenantId  String? // null until onboarding creates/links an org
+  role      String   @default("owner") // owner (full access) | member (employee, RBAC-limited)
   tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   createdAt DateTime @default(now())
   sessions  Session[]
@@ -117,6 +118,7 @@ model Feedback {
   message     String
   rating      Int? // 1..5
   status      String       @default("new") // new | in_progress | done | wont_do
+  assigneeId  String? // user id of the team member working on it
   endUser     String? // JSON: { id?, email? }
   metadata    String       @default("{}") // JSON: url/browser/os/device/...
   createdAt   DateTime     @default(now())
@@ -147,6 +149,20 @@ model Payment {
   tenant      Tenant   @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
+}
+
+// Activity timeline for a feedback item — who did what, when (created/status/assigned/comment).
+model FeedbackEvent {
+  id         String   @id
+  feedbackId String
+  tenantId   String
+  actorId    String? // user id (null = via API/system)
+  actorName  String // display name captured at the time
+  kind       String // created | status | assigned | unassigned | comment
+  detail     String   @default("")
+  createdAt  DateTime @default(now())
+
+  @@index([feedbackId])
 }
 
 model Attachment {

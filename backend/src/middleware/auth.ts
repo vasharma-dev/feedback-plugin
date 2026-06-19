@@ -18,6 +18,8 @@ declare global {
       cookies?: Record<string, string>;
       tenantId?: string; // resolved tenant (from a secret key OR a session cookie)
       userId?: string; // resolved user id (session path only)
+      userRole?: string; // owner | member (secret key = owner)
+      userName?: string; // actor display name for the timeline
     }
   }
 }
@@ -86,6 +88,8 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
       if (apiKey.kind !== "secret") return res.status(403).json({ error: "secret_key_required" });
       req.apiKey = apiKey;
       req.tenantId = apiKey.tenantId;
+      req.userRole = "owner"; // the secret key is the admin credential → full access
+      req.userName = "API";
       return next();
     }
     // 2) Otherwise fall back to the session cookie.
@@ -93,10 +97,20 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
     if (user?.tenantId) {
       req.userId = user.id;
       req.tenantId = user.tenantId;
+      req.userRole = user.role;
+      req.userName = user.name || user.email;
       return next();
     }
     return res.status(401).json({ error: "auth_required" });
   } catch (err) {
     next(err);
   }
+}
+
+/** Gate for owner-only actions (billing, settings, widget config, team management). */
+export function requireOwner(req: Request, res: Response, next: NextFunction) {
+  if (req.userRole !== "owner") {
+    return res.status(403).json({ error: "owner_only", message: "Only an organization owner can do this." });
+  }
+  next();
 }

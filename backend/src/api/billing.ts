@@ -15,7 +15,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { createCheckoutSession, retrieveCheckoutSession } from "../billing/stripe.js";
 import { APP_URL } from "../config.js";
-import { resolveTenant } from "../middleware/auth.js";
+import { requireOwner, resolveTenant } from "../middleware/auth.js";
 import { isStripeConfigured } from "../settings.js";
 import { formatPackPrice, formatPrice, getPlan, isPackId, isPlanId, PLANS } from "../plans.js";
 import {
@@ -121,9 +121,9 @@ publicBillingRouter.get("/billing/checkout/return", async (req, res, next) => {
   }
 });
 
-// ---- secret-key: the tenant's own billing console ----
+// ---- the tenant's own billing console (owner only) ----
 export const billingRouter = Router();
-billingRouter.use(resolveTenant);
+billingRouter.use(resolveTenant, requireOwner);
 
 billingRouter.get("/", async (req, res, next) => {
   try {
