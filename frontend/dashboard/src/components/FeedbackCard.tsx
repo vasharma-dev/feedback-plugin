@@ -19,6 +19,13 @@ const TYPE_META: Record<string, { label: string; cls: string; emoji: string }> =
   question: { label: "Question", emoji: "❓", cls: "bg-amber-50 text-amber-700 ring-amber-200" },
 };
 
+const SEVERITY_META: Record<string, { label: string; cls: string }> = {
+  low: { label: "Low", cls: "bg-slate-100 text-slate-600 ring-slate-200" },
+  medium: { label: "Medium", cls: "bg-amber-50 text-amber-700 ring-amber-200" },
+  high: { label: "High", cls: "bg-orange-50 text-orange-700 ring-orange-200" },
+  critical: { label: "Critical", cls: "bg-red-50 text-red-700 ring-red-200" },
+};
+
 const STATUSES: Array<[FeedbackStatus, string]> = [
   ["new", "New"],
   ["in_progress", "In progress"],
@@ -100,6 +107,11 @@ export default function FeedbackCard({
           <span aria-hidden>{type.emoji}</span>
           {type.label}
         </span>
+        {item.severity && SEVERITY_META[item.severity] && (
+          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ring-1 ring-inset ${SEVERITY_META[item.severity].cls}`} title="Severity">
+            {SEVERITY_META[item.severity].label}
+          </span>
+        )}
         {item.ref && (
           <span className="font-mono text-[11px] font-semibold text-slate-500 bg-slate-100 rounded-md px-1.5 py-0.5" title="Reference ID">
             {item.ref}

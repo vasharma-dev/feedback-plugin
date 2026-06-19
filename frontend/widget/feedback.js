@@ -99,6 +99,7 @@
             emailField: "optional", // off | optional | required
             nameField: "off",
             phoneField: "off",
+            severityField: true,
             hideBranding: false,
           },
           opts.theme || {}
@@ -184,6 +185,24 @@
         }));
       this._typeRow = typeRow;
 
+      // Severity dropdown (per-org toggle). Defaults to Medium.
+      var sevSel = null;
+      this._severity = null;
+      if (this.cfg.theme.severityField) {
+        sevSel = el("select", {
+          "class": "jcm-ta",
+          style: {
+            width: "100%", boxSizing: "border-box", padding: "11px 12px", marginTop: "2px",
+            border: "1px solid " + pal.inputBorder, borderRadius: "10px", font: "14px " + FONT,
+            color: pal.text, outline: "none", background: pal.inputBg, cursor: "pointer",
+          },
+        }, [["low", "Low"], ["medium", "Medium"], ["high", "High"], ["critical", "Critical"]].map(function (o) {
+          return el("option", { value: o[0] }, [o[1]]);
+        }));
+        sevSel.value = "medium";
+        this._severity = sevSel;
+      }
+
       var stars = el("div", { style: { display: "flex", gap: "4px", fontSize: "28px", cursor: "pointer", userSelect: "none" } },
         [1, 2, 3, 4, 5].map(function (i) {
           return el("span", {
@@ -266,6 +285,7 @@
 
       var body = el("div", {}, [
         label("What's this about?", pal), typeRow,
+        sevSel ? label("Severity", pal) : null, sevSel,
         label("How was your experience?", pal), stars,
         label("Your message", pal), textarea,
         nameInput ? label(nameMode === "required" ? "Your name *" : "Your name", pal) : null, nameInput,
@@ -396,6 +416,7 @@
       var payload = {
         type: s.type,
         message: message,
+        severity: this._severity ? this._severity.value : null,
         rating: s.rating || null,
         _hp: this._honeypot.value,
         endUser: endUser,

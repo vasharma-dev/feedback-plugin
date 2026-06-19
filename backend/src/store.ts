@@ -52,6 +52,7 @@ type ProjectRow = {
   emailField: string;
   nameField: string;
   phoneField: string;
+  severityField: boolean;
   hideBranding: boolean;
   feedbackPrefix: string;
   allowedOrigins: string;
@@ -75,6 +76,7 @@ function toProject(r: ProjectRow): Project {
         emailField: r.emailField,
         nameField: r.nameField,
         phoneField: r.phoneField,
+        severityField: r.severityField,
         hideBranding: r.hideBranding,
       },
       allowedOrigins: JSON.parse(r.allowedOrigins) as string[],
@@ -160,6 +162,7 @@ type FeedbackRow = {
   tenantId: string;
   type: string;
   message: string;
+  severity: string | null;
   rating: number | null;
   status: string;
   assigneeId: string | null;
@@ -180,6 +183,7 @@ function toFeedback(r: FeedbackRow): Feedback {
     tenantId: r.tenantId,
     type: r.type as FeedbackType,
     message: r.message,
+    severity: r.severity,
     rating: r.rating,
     status: r.status as FeedbackStatus,
     assigneeId: r.assigneeId,
@@ -270,6 +274,7 @@ export interface ProjectThemeInput {
   emailField?: string;
   nameField?: string;
   phoneField?: string;
+  severityField?: boolean;
   hideBranding?: boolean;
 }
 
@@ -293,6 +298,7 @@ export async function updateProjectTheme(
   if (theme.emailField !== undefined) data.emailField = theme.emailField;
   if (theme.nameField !== undefined) data.nameField = theme.nameField;
   if (theme.phoneField !== undefined) data.phoneField = theme.phoneField;
+  if (theme.severityField !== undefined) data.severityField = theme.severityField;
   if (theme.hideBranding !== undefined) data.hideBranding = theme.hideBranding;
   const res = await prisma.project.updateMany({ where: { id: projectId, tenantId }, data });
   if (res.count === 0) return undefined;
@@ -319,6 +325,7 @@ export interface CreateFeedbackInput {
   tenantId: string;
   type: FeedbackType;
   message: string;
+  severity?: string | null;
   rating: number | null;
   endUser: { id?: string; email?: string; name?: string; phone?: string } | null;
   metadata: Record<string, unknown>;
@@ -354,6 +361,7 @@ export async function createFeedback(input: CreateFeedbackInput): Promise<Feedba
       tenantId: input.tenantId,
       type: input.type,
       message: input.message,
+      severity: input.severity ?? null,
       rating: input.rating,
       status: "new",
       endUser: input.endUser ? JSON.stringify(input.endUser) : null,

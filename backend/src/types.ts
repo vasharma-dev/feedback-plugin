@@ -55,6 +55,7 @@ export interface WidgetTheme {
   emailField: string; // off | optional | required
   nameField: string; // off | optional | required
   phoneField: string; // off | optional | required
+  severityField: boolean; // show the Severity dropdown
   hideBranding: boolean;
 }
 
@@ -108,6 +109,7 @@ export interface Feedback {
   tenantId: string;
   type: FeedbackType;
   message: string;
+  severity: string | null; // low | medium | high | critical
   rating: number | null; // 1..5
   status: FeedbackStatus;
   assigneeId: string | null; // team member working on it

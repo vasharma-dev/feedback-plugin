@@ -14,6 +14,7 @@ const DEFAULTS: WidgetTheme = {
   emailField: "optional",
   nameField: "off",
   phoneField: "off",
+  severityField: true,
   hideBranding: false,
 };
 
@@ -264,6 +265,13 @@ function Editor({ apiKey, project }: { apiKey: string; project: Project }) {
           </div>
 
           <label className="flex items-center gap-3 pt-1 cursor-pointer">
+            <input type="checkbox" className="accent-brand-600 w-4 h-4" checked={theme.severityField} onChange={(e) => set("severityField", e.target.checked)} />
+            <span className="text-sm text-slate-700">
+              Show the <span className="font-medium">Severity</span> dropdown (Low / Medium / High / Critical)
+            </span>
+          </label>
+
+          <label className="flex items-center gap-3 cursor-pointer">
             <input type="checkbox" className="accent-brand-600 w-4 h-4" checked={theme.hideBranding} onChange={(e) => set("hideBranding", e.target.checked)} />
             <span className="text-sm text-slate-700">
               White-label — hide the <span className="text-slate-500">“Powered by jicama”</span> footer
@@ -389,6 +397,12 @@ function Preview({ theme }: { theme: WidgetTheme }) {
               </div>
             ))}
           </div>
+          {theme.severityField && (
+            <div className="mt-2 h-7 rounded-lg border flex items-center justify-between px-2 text-[10px]" style={{ borderColor: pal.chipBorder, background: pal.inputBg, color: pal.muted }}>
+              <span>Severity: Medium</span>
+              <span>▾</span>
+            </div>
+          )}
           <div className="mt-2 h-12 rounded-lg border" style={{ borderColor: pal.chipBorder, background: pal.inputBg }} />
           {([
             ["nameField", "your name"],

@@ -18,6 +18,7 @@ const attachmentSchema = z.object({
 const feedbackSchema = z.object({
   type: z.enum(["bug", "idea", "praise", "question"]),
   message: z.string().min(1).max(5000),
+  severity: z.enum(["low", "medium", "high", "critical"]).nullable().optional(),
   rating: z.number().int().min(1).max(5).nullable().optional(),
   // honeypot: real users never fill this hidden field; bots do.
   // Accept any value here so we can drop it *silently* below rather than 422-ing
@@ -63,6 +64,7 @@ ingestRouter.post("/feedback", requirePublicKey, rateLimit, async (req, res, nex
       tenantId: project.tenantId,
       type: body.type,
       message: body.message,
+      severity: body.severity ?? null,
       rating: body.rating ?? null,
       endUser: body.endUser ?? null,
       metadata: body.metadata ?? {},

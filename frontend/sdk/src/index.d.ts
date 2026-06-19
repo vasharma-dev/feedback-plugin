@@ -16,6 +16,7 @@ export interface FeedbackTheme {
   emailField?: "off" | "optional" | "required";
   nameField?: "off" | "optional" | "required";
   phoneField?: "off" | "optional" | "required";
+  severityField?: boolean;
   hideBranding?: boolean;
 }
 
@@ -30,6 +31,7 @@ export interface InitOptions {
 export interface SubmitInput {
   type: "bug" | "idea" | "praise" | "question";
   message: string;
+  severity?: "low" | "medium" | "high" | "critical" | null;
   rating?: number | null;
   user?: FeedbackUser | null;
   metadata?: Record<string, unknown>;

@@ -323,6 +323,14 @@ async function main() {
   ok("name + email + phone are captured on feedback",
     ci && ci.endUser?.name === "Jane Q" && ci.endUser?.email === "jane@x.com" && ci.endUser?.phone === "+1 555 0100");
 
+  // Severity dropdown: served via config + captured on submit; invalid value rejected.
+  ok("widget config carries the severity toggle", cfg3.theme?.severityField === true);
+  const sev = await (await fetch(`${BASE}/v1/feedback`, { method: "POST", headers: j(freeAcct.publicKey), body: JSON.stringify({ type: "bug", message: "severity capture test", severity: "critical" }) })).json();
+  const sevList = await (await fetch(`${BASE}/v1/admin/feedback?q=severity%20capture`, { headers: j(freeAcct.secretKey) })).json();
+  ok("severity is captured on feedback", (sevList.items.find((i) => i.id === sev.id) || {}).severity === "critical");
+  const badSev = await fetch(`${BASE}/v1/feedback`, { method: "POST", headers: j(freeAcct.publicKey), body: JSON.stringify({ type: "bug", message: "x", severity: "apocalyptic" }) });
+  ok("an invalid severity is rejected (422)", badSev.status === 422, `got ${badSev.status}`);
+
   // Invalid theme values are rejected.
   const badTheme = await fetch(`${BASE}/v1/admin/projects/${freeProjectId}`, {
     method: "PATCH", headers: j(freeAcct.secretKey),

@@ -85,6 +85,7 @@ model Project {
   emailField     String     @default("optional") // off | optional | required — reporter email capture
   nameField      String     @default("off") // off | optional | required — reporter name
   phoneField     String     @default("off") // off | optional | required — reporter phone
+  severityField  Boolean    @default(true) // show the Severity dropdown in the widget
   hideBranding   Boolean    @default(false) // white-label: drop "Powered by jicama"
   // Human-friendly feedback reference IDs, e.g. prefix "jicamabug" → jicamabug01, jicamabug02…
   feedbackPrefix String     @default("") // empty = no custom reference
@@ -119,6 +120,7 @@ model Feedback {
   tenantId    String
   type        String // bug | idea | praise | question
   message     String
+  severity    String? // low | medium | high | critical (when the widget shows the dropdown)
   rating      Int? // 1..5
   status      String       @default("new") // new | in_progress | done | wont_do
   assigneeId  String? // user id of the team member working on it

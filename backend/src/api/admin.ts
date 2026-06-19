@@ -74,6 +74,7 @@ const themeSchema = z
     emailField: z.enum(["off", "optional", "required"]).optional(),
     nameField: z.enum(["off", "optional", "required"]).optional(),
     phoneField: z.enum(["off", "optional", "required"]).optional(),
+    severityField: z.boolean().optional(),
     hideBranding: z.boolean().optional(),
   })
   .optional();

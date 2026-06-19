@@ -17,6 +17,7 @@ export interface Feedback {
   similarCount?: number;
   type: FeedbackType;
   message: string;
+  severity: string | null;
   rating: number | null;
   status: FeedbackStatus;
   assigneeId: string | null;
@@ -45,6 +46,7 @@ export interface WidgetTheme {
   emailField: string; // off | optional | required
   nameField: string;
   phoneField: string;
+  severityField: boolean;
   hideBranding: boolean;
 }
 

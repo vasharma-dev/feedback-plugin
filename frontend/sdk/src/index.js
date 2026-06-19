@@ -44,6 +44,7 @@ export const Feedback = {
       body: JSON.stringify({
         type: feedback.type,
         message: feedback.message,
+        severity: feedback.severity ?? null,
         rating: feedback.rating ?? null,
         endUser: feedback.user ?? cfg.user,
         metadata: feedback.metadata ?? {},
